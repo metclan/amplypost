@@ -1,0 +1,151 @@
+// app/layout.tsx or app/(marketing)/layout.tsx
+import type { Metadata } from "next";
+import "./globals.css";
+import { Toaster } from "sonner";
+import { GoogleAnalytics } from '@next/third-parties/google'
+import ThemeProvider from "./components/theme-provider";
+
+export const metadata: Metadata = {
+  // === Basic ===
+  title: {
+    default: "Amplypost — Schedule Posts to TikTok, Instagram, Twitter, LinkedIn & More",
+    template: "%s | Amplypost",
+  },
+  description:
+    "The all-in-one social media scheduling tool. Schedule and crosspost to TikTok, Instagram, Twitter (X), LinkedIn, Threads, YouTube Shorts + send bulk email, SMS & WhatsApp campaigns from one dashboard.",
+
+  // === Open Graph / Facebook ===
+  openGraph: {
+    title: "Amplypost — Cross-Post to All Social Media in One Click",
+    description:
+      "Save hours every week. Schedule once and automatically publish to TikTok, Instagram, Twitter/X, LinkedIn, Threads, Facebook, Pinterest + bulk email, SMS & WhatsApp.",
+    url: "https://www.amplypost.com",
+    siteName: "Amplypost",
+    images: [
+      {
+        url: "https://res.cloudinary.com/deamgyfii/image/upload/v1772100248/Social_media_scheduler_kgx1qd.png", // 1200×630 recommended
+        width: 1200,
+        height: 630,
+        alt: "Amplypost – Social Media Scheduling & Bulk Messaging Tool",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+
+  // === Twitter (X) Cards ===
+  twitter: {
+    card: "summary_large_image",
+    title: "Amplypost — Schedule & Crosspost to Every Platform",
+    description:
+      "One tool to rule them all: TikTok, Instagram, Twitter/X, LinkedIn, Threads + Email, SMS & WhatsApp campaigns.",
+    images: ["https://res.cloudinary.com/deamgyfii/image/upload/v1772100248/Social_media_scheduler_kgx1qd.png"], // 1200×628 or same as OG
+    creator: "@amplypost", // change to your real handle
+    site: "@amplypost",
+  },
+
+  // === Icons ===
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon-32x32.png",
+    apple: "/apple-touch-icon.png",
+  },
+
+  // === Robots & Verification ===
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+
+  // === Verification (add your real codes) ===
+  verification: {
+    google: "your-google-search-console-code",
+    // yandex: "...",
+    // bing: "...",
+  },
+
+  // === Canonical URL ===
+  alternates: {
+    canonical: "https://www.amplypost.com",
+  },
+
+  // === Additional SEO Boosters ===
+  category: "technology",
+  classification: "Social Media Management Software",
+  keywords: [
+    "social media scheduler",
+    "crossposting tool",
+    "schedule tiktok posts",
+    "instagram scheduler",
+    "twitter scheduler",
+    "linkedin automation",
+    "threads scheduler",
+    "bulk email marketing",
+    "sms marketing tool",
+    "whatsapp business automation",
+    "post to multiple platforms",
+    "amplypost",
+  ],
+};
+
+// Optional: Add JSON-LD structured data in your root layout or a separate component
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Structured Data - SoftwareApplication */}
+         <meta name="facebook-domain-verification" content="f58unlmeqjjlyqcl1kkck5vos94aqw" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "SoftwareApplication",
+              name: "Amplypost",
+              operatingSystem: "Web",
+              applicationCategory: "https://schema.org/BusinessApplication",
+              description:
+                "All-in-one social media scheduling and bulk messaging platform.",
+              url: "https://www.amplypost.com",
+              offers: {
+                "@type": "Offer",
+                price: "29", // update with real pricing or remove
+                priceCurrency: "USD",
+              },
+              aggregateRating: {
+                "@type": "AggregateRating",
+                ratingValue: "4.9",
+                reviewCount: "342",
+              },
+              featureList: [
+                "Cross-post to TikTok, Instagram, Twitter/X, LinkedIn, Threads",
+                "Bulk Email Campaigns",
+                "SMS Marketing",
+                "WhatsApp Business Automation",
+                "Content Calendar & Analytics",
+              ],
+            }),
+          }}
+        />
+      </head>
+      <body>
+        <ThemeProvider>
+          <Toaster position="top-right" richColors />
+          {children}
+        </ThemeProvider>
+      </body>
+      <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID || ""} />
+    </html>
+  );
+}
