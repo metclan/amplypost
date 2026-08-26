@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { GetAmplypostCard } from "@/app/components/get-amplypost-card";
+import { backendApiUrl } from "@/util/backend-api";
 
 type VideoResult = {
     downloadUrl?: string;
@@ -29,7 +30,7 @@ export default function YouTubeDownloader() {
         setResult(null);
 
         try {
-            const res = await fetch("/api/tools/youtube-downloader", {
+            const res = await fetch(backendApiUrl("tools/youtube-downloader"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ url: trimmed }),

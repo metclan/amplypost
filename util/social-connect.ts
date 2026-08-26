@@ -127,6 +127,29 @@ export const connectYouTube = () => {
     window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
 
+export const connectGoogleBusinessProfile = () => {
+    const clientId = process.env.NEXT_PUBLIC_CLIENT_ID_GOOGLE_BUSINESS_PROFILE;
+    const redirectUri = process.env.NEXT_PUBLIC_REDIRECT_URI_GOOGLE_BUSINESS_PROFILE;
+
+    if (!clientId || !redirectUri) {
+        console.error("Missing Google Business Profile OAuth env vars");
+        return;
+    }
+
+    const params = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: "code",
+        scope: "https://www.googleapis.com/auth/business.manage",
+        access_type: "offline",
+        prompt: "consent",
+        include_granted_scopes: "true",
+        state: crypto.randomUUID(),
+    });
+
+    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+}
+
 export const PINTEREST_OAUTH_SCOPES = [
     "user_accounts:read",
     "boards:read",

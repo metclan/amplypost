@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import AccountCard from "./account-card";
 import DeleteConfirmationModal from "@/app/components/delete-confirmation-modal";
+import { backendApiUrl } from "@/util/backend-api";
 
 interface ConnectedAccount {
     id: string;
@@ -31,17 +32,19 @@ function AccountCardSkeleton() {
 }
 
 // Get provider logo
-const getProviderLogo = (provider: string) => {
+const getPlatformLogo = (provider: string) => {
     const logoMap: Record<string, string> = {
         facebook: "/facebook-logo.svg",
         instagram: "/instagram-logo.svg",
-        tiktok: "/tiktok-logo.svg",
+        tiktok: "/tiktok-logo.png",
         linkedin: "/linkedin-logo.svg",
         youtube: "/youtube-logo.svg",
         pinterest: "/pinterest-logo.svg",
-        twitter: "/twitter-logo.svg",
-        threads: "/thread-logo.svg",
+        twitter: "/twitter-logo.png",
+        threads: "/threads-logo.png",
         bluesky: "/bluesky-logo.svg",
+        "google-business-profile": "/google-my-business-logo.svg",
+        google_business_profile: "/google-my-business-logo.svg",
     };
     return logoMap[provider.toLowerCase()] || "/default-logo.svg";
 };
@@ -61,8 +64,8 @@ export default function AccountsDisplay() {
                 setIsLoading(true);
                 // Build URL with provider query param if filter is active
                 const url = selectedFilter === "all"
-                    ? "/api/connected-accounts"
-                    : `/api/connected-accounts?provider=${encodeURIComponent(selectedFilter)}`;
+                    ? backendApiUrl("connected-accounts")
+                    : backendApiUrl(`connected-accounts?provider=${encodeURIComponent(selectedFilter)}`);
 
                 const response = await fetch(url);
                 if (response.ok) {
@@ -107,7 +110,7 @@ export default function AccountsDisplay() {
 
         try {
             setIsDeleting(true);
-            const response = await fetch(`/api/connected-accounts/${accountToDelete}`, {
+            const response = await fetch(backendApiUrl(`connected-accounts/${accountToDelete}`), {
                 method: "DELETE",
             });
 
@@ -165,7 +168,7 @@ export default function AccountsDisplay() {
                         >
                             {provider !== "all" && (
                                 <Image
-                                    src={getProviderLogo(provider)}
+                                    src={getPlatformLogo(provider)}
                                     alt={provider}
                                     width={16}
                                     height={16}

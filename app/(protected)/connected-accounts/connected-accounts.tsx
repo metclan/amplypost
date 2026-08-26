@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
     ChevronDown,
     ExternalLink,
@@ -17,6 +18,7 @@ import {
     connectFacebook,
     connectInstagram,
     connectInstagramUsingFacebook,
+    connectGoogleBusinessProfile,
     connectLinkedIn,
     connectPinterest,
     connectThread,
@@ -28,37 +30,17 @@ import DeleteConfirmationModal from "@/app/components/delete-confirmation-modal"
 import ConnectConfirmationModal from "@/app/components/connect-confirmation-modal";
 import InstagramConnectionModal from "@/app/components/instagram-connection-modal";
 import { toast } from "sonner";
-
-type BackendAccount = {
-    id: string;
-    provider: string;
-    accountId: string;
-    accountName: string;
-    accountUsername: string | null;
-    profilePicture: string | null;
-    accessTokenExpiresAt: string | null;
-    refreshTokenExpiresAt: string | null;
-    scopes: string[] | null;
-    createdAt: string;
-    updatedAt: string;
-    isActive: boolean;
-    hasRefreshToken: boolean;
-    accessTokenExpired: boolean;
-    refreshTokenExpired: boolean;
-};
-
-type AccountsResponse = {
-    message: string;
-    data: BackendAccount[];
-};
-
-type ConnectedAccount = BackendAccount & {
-    account_id: string;
-    account_name: string;
-    account_username: string | null;
-    profile_picture: string;
-    scopes: string[];
-};
+import { useCachedResource } from "@/lib/client-cache";
+import { SubscriptionRequiredError, parseApiErrorResponse } from "@/lib/client-errors";
+import {
+    ACCOUNTS_CACHE_KEY,
+    CACHE_TTL,
+    fetchAccounts,
+    getPlatformLogo,
+    invalidateAccountData,
+    type ConnectedAccount,
+} from "@/lib/client-data";
+import { backendApiUrl } from "@/util/backend-api";
 
 type Platform = {
     id: string;
@@ -76,24 +58,16 @@ const AccountRowSkeleton = () => (
     </div>
 );
 
-function normalizeAccount(account: BackendAccount): ConnectedAccount {
-    return {
-        ...account,
-        account_id: account.accountId,
-        account_name: account.accountName,
-        account_username: account.accountUsername,
-        profile_picture: account.profilePicture || `/${account.provider.toLowerCase()}-logo.svg`,
-        scopes: account.scopes ?? [],
-    };
-}
-
 function accountNeedsAttention(account: ConnectedAccount) {
     return !account.isActive || account.accessTokenExpired || account.refreshTokenExpired;
 }
 
+function normalizeProviderId(provider: string) {
+    return provider.trim().toLowerCase().replaceAll("_", "-");
+}
+
 export default function ConnectedAccounts() {
-    const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const router = useRouter();
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [facebookModalOpen, setFacebookModalOpen] = useState(false);
     const [instagramModalOpen, setInstagramModalOpen] = useState(false);
@@ -104,6 +78,18 @@ export default function ConnectedAccounts() {
     const [blueskyIdentifier, setBlueskyIdentifier] = useState("");
     const [blueskyPassword, setBlueskyPassword] = useState("");
     const [isConnectingBluesky, setIsConnectingBluesky] = useState(false);
+    const {
+        data: accounts = [],
+        error: accountsError,
+        isLoading,
+        refetch: refetchAccounts,
+    } = useCachedResource(ACCOUNTS_CACHE_KEY, fetchAccounts, { ttl: CACHE_TTL });
+
+    useEffect(() => {
+        void refetchAccounts().catch((error) => {
+            console.error("Failed to refresh connected accounts:", error);
+        });
+    }, [refetchAccounts]);
 
     const platforms: Platform[] = useMemo(
         () => [
@@ -150,6 +136,13 @@ export default function ConnectedAccounts() {
                 onClick: connectYouTube,
             },
             {
+                id: "google-business-profile",
+                name: "Google Business Profile",
+                logo: "/google-my-business-logo.svg",
+                description: "Connect your Google Business Profile to publish business updates.",
+                onClick: connectGoogleBusinessProfile,
+            },
+            {
                 id: "pinterest",
                 name: "Pinterest",
                 logo: "/pinterest-logo.svg",
@@ -174,33 +167,6 @@ export default function ConnectedAccounts() {
         []
     );
 
-    const fetchAccounts = async () => {
-        try {
-            setIsLoading(true);
-            const response = await fetch("/api/accounts", {
-                credentials: "include",
-                cache: "no-store",
-            });
-
-            const data = (await response.json().catch(() => null)) as AccountsResponse | null;
-
-            if (!response.ok) {
-                throw new Error(data?.message || "Failed to fetch connected accounts.");
-            }
-
-            setAccounts((data?.data ?? []).map(normalizeAccount));
-        } catch (error) {
-            console.error("Failed to fetch connected accounts:", error);
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to fetch connected accounts.",
-            );
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
     const handleConnectBluesky = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
@@ -214,7 +180,7 @@ export default function ConnectedAccounts() {
 
         setIsConnectingBluesky(true);
         try {
-            const response = await fetch("/api/accounts/bluesky/connect", {
+            const response = await fetch(backendApiUrl("accounts/bluesky/connect"), {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -227,33 +193,30 @@ export default function ConnectedAccounts() {
                 }),
             });
 
-            const data = await response.json().catch(() => null);
-
             if (!response.ok) {
-                throw new Error(
-                    data?.message ||
-                    data?.error ||
-                    "Failed to connect Bluesky account.",
-                );
+                await parseApiErrorResponse(response, "Failed to connect Bluesky account.");
             }
 
+            const data = await response.json().catch(() => null);
             toast.success(data?.message || "Bluesky account connected.");
             setBlueskyIdentifier("");
             setBlueskyPassword("");
             setBlueskyModalOpen(false);
-            await fetchAccounts();
+            invalidateAccountData();
+            await refetchAccounts();
         } catch (error) {
             console.error("Failed to connect Bluesky account:", error);
+            if (error instanceof SubscriptionRequiredError) {
+                toast.error(error.message);
+                router.push("/subscribe");
+                return;
+            }
             toast.error(error instanceof Error ? error.message : "Failed to connect Bluesky account.");
         } finally {
             setIsConnectingBluesky(false);
             setLoadingPlatform(null);
         }
     };
-
-    useEffect(() => {
-        void fetchAccounts();
-    }, []);
 
     const handlePlatformClick = async (platformId: string, onClick: () => void | Promise<void>) => {
         setLoadingPlatform(platformId);
@@ -276,7 +239,7 @@ export default function ConnectedAccounts() {
         try {
             setIsDeleting(true);
 
-            const response = await fetch(`/api/accounts/${accountToDelete}`, {
+            const response = await fetch(backendApiUrl(`accounts/${accountToDelete}`), {
                 method: "DELETE",
                 credentials: "include",
             });
@@ -287,9 +250,8 @@ export default function ConnectedAccounts() {
                 throw new Error(data?.message || data?.error || "Failed to disconnect account.");
             }
 
-            setAccounts((currentAccounts) =>
-                currentAccounts.filter((account) => account.id !== accountToDelete),
-            );
+            invalidateAccountData();
+            await refetchAccounts();
             toast.success(data?.message || "Account disconnected.");
             setDeleteModalOpen(false);
             setAccountToDelete(null);
@@ -335,6 +297,28 @@ export default function ConnectedAccounts() {
                     </button>
                 </div>
 
+                {accountsError instanceof SubscriptionRequiredError && (
+                    <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-200">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <span>{accountsError.message}</span>
+                            <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => router.push("/subscribe")}
+                                className="bg-violet-600 text-white hover:bg-violet-500"
+                            >
+                                View plans
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {accountsError && !(accountsError instanceof SubscriptionRequiredError) && (
+                    <div className="rounded-xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-600 dark:text-red-200">
+                        {accountsError.message}
+                    </div>
+                )}
+
                 <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
                     {isLoading ? (
                         <div className="divide-y divide-border">
@@ -348,9 +332,9 @@ export default function ConnectedAccounts() {
                         </div>
                     ) : (
                         accounts.map((account) => {
-                            const provider = account.provider.toLowerCase();
+                            const provider = normalizeProviderId(account.provider);
                             const platform = platforms.find((p) => p.id === provider);
-                            const providerLogo = platform?.logo || "/default-logo.svg";
+                            const providerLogo = platform?.logo || getPlatformLogo(provider);
                             const needsAttention = accountNeedsAttention(account);
 
                             return (

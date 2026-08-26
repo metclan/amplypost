@@ -68,10 +68,10 @@ export default function Hero() {
                             { name: "Facebook", src: "/facebook-logo.svg", size: 40 },
                             { name: "Instagram", src: "/instagram-logo.svg", size: 32 },
                             { name: "LinkedIn", src: "/linkedin-logo.svg", size: 32 },
-                            { name: "TikTok", src: "/tiktok-logo.svg", size: 32 },
+                            { name: "TikTok", src: "/tiktok-logo.png", size: 32 },
                             { name: "YouTube", src: "/youtube-logo.svg", size: 32 },
-                            { name: "X", src: "/x-logo.svg", size: 32 },
-                            { name: "Threads", src: "/thread-logo.svg", size: 32 },
+                            { name: "X", src: "/twitter-logo.png", size: 32 },
+                            { name: "Threads", src: "/threads-logo.png", size: 32 },
                         ].map((logo) => (
                             <div key={logo.name} className="flex items-center gap-2 opacity-70 transition-opacity hover:opacity-100">
                                 <Image

@@ -109,6 +109,47 @@ const sections = [
     },
     {
         number: "5",
+        title: "Google User Data Retention and Deletion",
+        body: (
+            <div className="space-y-4">
+                <p>
+                    Amplypost retains Google user data only for as long as necessary to provide
+                    the services requested by the user, such as connecting a YouTube channel
+                    and publishing or managing scheduled content.
+                </p>
+                <p>
+                    When a user disconnects their Google account from Amplypost, we delete
+                    stored Google OAuth access and refresh tokens associated with that
+                    connection and cease accessing the user&apos;s Google account.
+                </p>
+                <p>
+                    Users may also request deletion of their Google-related data by contacting
+                    us at{" "}
+                    <a
+                        href="mailto:support@amplypost.com"
+                        className="font-medium text-primary underline-offset-4 hover:underline"
+                    >
+                        support@amplypost.com
+                    </a>
+                    . Upon receiving a valid deletion request, we will delete the associated
+                    Google user data from our active systems within 30 days, except where
+                    retention is required by law or necessary for legitimate security,
+                    fraud-prevention, or compliance purposes.
+                </p>
+                <p>
+                    Deleting an Amplypost account will also result in deletion of Google user
+                    data associated with that account, subject to the same limited legal and
+                    security exceptions.
+                </p>
+                <p>
+                    Amplypost does not sell Google user data or use Google user data for
+                    advertising purposes.
+                </p>
+            </div>
+        ),
+    },
+    {
+        number: "6",
         title: "Data Sharing",
         body: (
             <p>
@@ -120,17 +161,17 @@ const sections = [
         ),
     },
     {
-        number: "6",
+        number: "7",
         title: "Children's Privacy",
         body: <p>Amplypost is not intended for children, and we do not collect any data from children.</p>,
     },
     {
-        number: "7",
+        number: "8",
         title: "Updates to the Privacy Policy",
         body: <p>We may update this Privacy Policy from time to time. Users will be notified of any changes via email.</p>,
     },
     {
-        number: "8",
+        number: "9",
         title: "Contact Information",
         body: (
             <div>
@@ -151,7 +192,7 @@ const sections = [
         ),
     },
     {
-        number: "9",
+        number: "10",
         title: "Data Protection Mechanisms",
         body: (
             <div className="space-y-4">

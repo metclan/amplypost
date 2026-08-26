@@ -1,43 +1,27 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import {
     AlertTriangle,
     CalendarClock,
     CheckCircle2,
     Clock3,
+    Eye,
     Link2,
     Loader2,
     Send,
 } from "lucide-react";
-
-interface DashboardTotals {
-    posts: number;
-    pendingPosts: number;
-    scheduledPosts: number;
-    accounts: number;
-    accountsRequiringAttention: number;
-}
-
-interface DashboardResponse {
-    data?: {
-        totals?: Partial<DashboardTotals>;
-    };
-    message?: string;
-}
-
-interface RecentPost {
-    provider: string;
-    status: string;
-    isStory: boolean;
-    createdAt: string;
-}
-
-interface RecentPostsResponse {
-    data?: RecentPost[];
-    message?: string;
-}
+import { useCachedResource } from "@/lib/client-cache";
+import {
+    CACHE_TTL,
+    RECENT_POSTS_CACHE_KEY,
+    emptyDashboardTotals,
+    fetchDashboardTotals,
+    fetchRecentPosts,
+    getDashboardCacheKey,
+    getPlatformLogo,
+} from "@/lib/client-data";
 
 function getMonthRange(date: Date) {
     const from = new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
@@ -76,106 +60,24 @@ function statusColor(status: string) {
     return colors[status] || "bg-gray-500/15 text-gray-400 border-gray-500/25";
 }
 
-const emptyTotals: DashboardTotals = {
-    posts: 0,
-    pendingPosts: 0,
-    scheduledPosts: 0,
-    accounts: 0,
-    accountsRequiringAttention: 0,
-};
-
 export default function DashboardClient() {
     const [currentMonth, setCurrentMonth] = useState(() => new Date());
-    const [totals, setTotals] = useState<DashboardTotals>(emptyTotals);
-    const [recentPosts, setRecentPosts] = useState<RecentPost[]>([]);
-    const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
-    const [isLoadingRecentPosts, setIsLoadingRecentPosts] = useState(true);
-    const [dashboardError, setDashboardError] = useState<string | null>(null);
-    const [recentPostsError, setRecentPostsError] = useState<string | null>(null);
-
     const monthRange = useMemo(() => getMonthRange(currentMonth), [currentMonth]);
+    const dashboardParams = useMemo(() => new URLSearchParams(monthRange), [monthRange]);
+    const dashboardCacheKey = useMemo(() => getDashboardCacheKey(dashboardParams), [dashboardParams]);
+    const fetchDashboard = useCallback(() => fetchDashboardTotals(dashboardParams), [dashboardParams]);
+    const fetchRecent = useCallback(() => fetchRecentPosts(5), []);
 
-    useEffect(() => {
-        let isCurrent = true;
-
-        async function fetchDashboard() {
-            setIsLoadingDashboard(true);
-            setDashboardError(null);
-
-            try {
-                const params = new URLSearchParams(monthRange);
-                const response = await fetch(`/api/dashboard?${params.toString()}`, {
-                    credentials: "include",
-                    cache: "no-store",
-                });
-                const data = (await response.json().catch(() => null)) as DashboardResponse | null;
-
-                if (!response.ok) {
-                    throw new Error(data?.message || "Failed to load dashboard.");
-                }
-
-                if (isCurrent) {
-                    setTotals({
-                        ...emptyTotals,
-                        ...(data?.data?.totals ?? {}),
-                    });
-                }
-            } catch (error) {
-                if (isCurrent) {
-                    setDashboardError(error instanceof Error ? error.message : "Failed to load dashboard.");
-                }
-            } finally {
-                if (isCurrent) {
-                    setIsLoadingDashboard(false);
-                }
-            }
-        }
-
-        fetchDashboard();
-
-        return () => {
-            isCurrent = false;
-        };
-    }, [monthRange]);
-
-    useEffect(() => {
-        let isCurrent = true;
-
-        async function fetchRecentPosts() {
-            setIsLoadingRecentPosts(true);
-            setRecentPostsError(null);
-
-            try {
-                const response = await fetch("/api/dashboard/recent-posts?limit=5", {
-                    credentials: "include",
-                    cache: "no-store",
-                });
-                const data = (await response.json().catch(() => null)) as RecentPostsResponse | null;
-
-                if (!response.ok) {
-                    throw new Error(data?.message || "Failed to load recent posts.");
-                }
-
-                if (isCurrent) {
-                    setRecentPosts(data?.data ?? []);
-                }
-            } catch (error) {
-                if (isCurrent) {
-                    setRecentPostsError(error instanceof Error ? error.message : "Failed to load recent posts.");
-                }
-            } finally {
-                if (isCurrent) {
-                    setIsLoadingRecentPosts(false);
-                }
-            }
-        }
-
-        fetchRecentPosts();
-
-        return () => {
-            isCurrent = false;
-        };
-    }, []);
+    const {
+        data: totals = emptyDashboardTotals,
+        error: dashboardError,
+        isLoading: isLoadingDashboard,
+    } = useCachedResource(dashboardCacheKey, fetchDashboard, { ttl: CACHE_TTL });
+    const {
+        data: recentPosts = [],
+        error: recentPostsError,
+        isLoading: isLoadingRecentPosts,
+    } = useCachedResource(RECENT_POSTS_CACHE_KEY, fetchRecent, { ttl: CACHE_TTL });
 
     const postSummary = [
         {
@@ -247,7 +149,7 @@ export default function DashboardClient() {
 
             {dashboardError && (
                 <div className="rounded-xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-600 dark:text-red-200">
-                    {dashboardError}
+                    {dashboardError.message}
                 </div>
             )}
 
@@ -296,6 +198,15 @@ export default function DashboardClient() {
                                         <p className="mt-2 text-3xl font-semibold text-foreground">
                                             {isLoadingDashboard ? "-" : item.value}
                                         </p>
+                                        {item.label === "Need attention" && !isLoadingDashboard && item.value > 0 && (
+                                            <Link
+                                                href="/connected-accounts"
+                                                className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-xs font-medium text-foreground hover:bg-accent"
+                                            >
+                                                <Eye className="h-3.5 w-3.5" />
+                                                View
+                                            </Link>
+                                        )}
                                     </div>
                                     <div className={`rounded-lg p-2 ${item.tone}`}>
                                         <Icon className="h-5 w-5 text-foreground" />
@@ -316,7 +227,7 @@ export default function DashboardClient() {
                     <div className="flex items-center gap-3">
                         {isLoadingRecentPosts && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
                         <Link
-                            href="/calendar"
+                            href="/posts"
                             className="inline-flex h-9 items-center justify-center rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground hover:bg-accent"
                         >
                             View more
@@ -325,7 +236,7 @@ export default function DashboardClient() {
                 </div>
 
                 {recentPostsError ? (
-                    <div className="p-4 text-sm text-red-600 dark:text-red-200">{recentPostsError}</div>
+                    <div className="p-4 text-sm text-red-600 dark:text-red-200">{recentPostsError.message}</div>
                 ) : recentPosts.length === 0 && !isLoadingRecentPosts ? (
                     <div className="p-8 text-center text-sm text-muted-foreground">No recent posts yet.</div>
                 ) : (
@@ -335,7 +246,7 @@ export default function DashboardClient() {
                                 <div className="flex min-w-0 items-center gap-3">
                                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
                                         <img
-                                            src={`/${post.provider.toLowerCase()}-logo.svg`}
+                                            src={getPlatformLogo(post.provider)}
                                             alt=""
                                             className="h-5 w-5"
                                         />

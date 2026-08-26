@@ -8,6 +8,7 @@ import { CheckCircle2, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { invalidateAccountData } from "@/lib/client-data";
 import { config } from "@/util/config";
 
 type ConnectionState = "loading" | "success" | "error";
@@ -26,7 +27,7 @@ function PageHeader() {
         <div className="border-b border-border pb-5">
             <div className="flex items-center gap-3">
                 <Image
-                    src="/tiktok-logo.svg"
+                    src="/tiktok-logo.png"
                     alt="TikTok"
                     width={32}
                     height={32}
@@ -133,6 +134,7 @@ export default function TikTokCallback() {
                     );
                 }
 
+                invalidateAccountData();
                 setState("success");
                 setMessage(data?.message || "Your TikTok account has been connected.");
             } catch (err) {

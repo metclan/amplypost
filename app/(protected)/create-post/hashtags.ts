@@ -1,3 +1,5 @@
+import { backendApiUrl } from "@/util/backend-api";
+
 export interface Hashtag {
     id: string;
     title: string;
@@ -50,7 +52,7 @@ export async function fetchHashtagGroups(options: { platformId?: string; search?
     }
 
     const query = params.toString() ? `?${params.toString()}` : "";
-    const response = await fetch(`/api/hashtags${query}`, {
+    const response = await fetch(backendApiUrl(`hashtags${query}`), {
         credentials: "include",
         cache: "no-store",
     });
@@ -65,7 +67,7 @@ export async function fetchHashtagGroups(options: { platformId?: string; search?
 }
 
 export async function createHashtagGroup(input: HashtagInput) {
-    const response = await fetch("/api/hashtags", {
+    const response = await fetch(backendApiUrl("hashtags"), {
         method: "POST",
         credentials: "include",
         headers: {
@@ -81,7 +83,7 @@ export async function createHashtagGroup(input: HashtagInput) {
 }
 
 export async function updateHashtagGroup(id: string, input: HashtagInput) {
-    const response = await fetch(`/api/hashtags/${id}`, {
+    const response = await fetch(backendApiUrl(`hashtags/${id}`), {
         method: "PATCH",
         credentials: "include",
         headers: {
@@ -97,7 +99,7 @@ export async function updateHashtagGroup(id: string, input: HashtagInput) {
 }
 
 export async function deleteHashtagGroup(id: string) {
-    const response = await fetch(`/api/hashtags/${id}`, {
+    const response = await fetch(backendApiUrl(`hashtags/${id}`), {
         method: "DELETE",
         credentials: "include",
     });

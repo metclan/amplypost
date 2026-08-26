@@ -1,13 +1,17 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import Image from "next/image";
 import { Spinner } from "@/components/ui/spinner";
+import { invalidateAccountData } from "@/lib/client-data";
+import { isSubscriptionRequiredError, parseApiErrorResponse } from "@/lib/client-errors";
+import { config } from "@/util/config";
 
 export default function InstagramCallback() {
+    const router = useRouter();
     const searchParams = useSearchParams();
     const code = searchParams.get('code');
     const error = searchParams.get('error');
@@ -36,21 +40,26 @@ export default function InstagramCallback() {
             }
 
             try {
-                const response = await fetch('/api/auth/instagram-facebook', {
+                const response = await fetch(`${config.backendUrl}auth/instagram-facebook`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
+                    credentials: "include",
                     body: JSON.stringify({ code }),
                 });
 
-                const data = await response.json();
-
                 if (!response.ok) {
-                    throw new Error(data.error || 'Failed to connect Instagram account');
+                    await parseApiErrorResponse(response, "Failed to connect Instagram account");
                 }
+
+                invalidateAccountData();
             } catch (err) {
                 console.error('Error during Instagram authorization:', err);
+                if (isSubscriptionRequiredError(err)) {
+                    router.push("/subscribe");
+                    return;
+                }
                 setApiError(err instanceof Error ? err.message : 'An unexpected error occurred');
             } finally {
                 setLoading(false);

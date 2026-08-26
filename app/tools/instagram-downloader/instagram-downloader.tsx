@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { GetAmplypostCard } from "@/app/components/get-amplypost-card";
+import { backendApiUrl } from "@/util/backend-api";
 
 type MediaDetail = {
     type: "video" | "image";
@@ -46,7 +47,7 @@ export default function InstagramDownloader() {
         setResult(null);
 
         try {
-            const res = await fetch("/api/tools/instagram-downloader", {
+            const res = await fetch(backendApiUrl("tools/instagram-downloader"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ url: trimmed }),
@@ -279,7 +280,7 @@ export default function InstagramDownloader() {
                                         )}
                                         {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img
-                                            src={`/api/proxy-image?url=${encodeURIComponent(item.thumbnail)}`}
+                                            src={backendApiUrl(`proxy-image?url=${encodeURIComponent(item.thumbnail)}`)}
                                             alt={`Media ${index + 1}`}
                                             className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${loadedImages.has(index) ? "opacity-100" : "opacity-0"
                                                 }`}

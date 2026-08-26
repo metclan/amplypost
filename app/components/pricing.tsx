@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Check, Zap } from "lucide-react";
+import { ArrowRight, Check, Zap } from "lucide-react";
+import { backendApiUrl } from "@/util/backend-api";
 
 interface PlanFeatures {
     platforms?: Record<string, boolean>;
@@ -122,7 +123,7 @@ export default function Pricing() {
             try {
                 setIsLoading(true);
                 setError(null);
-                const response = await fetch("/api/billing/plans", {
+                const response = await fetch(backendApiUrl("billing/plans"), {
                     credentials: "include",
                     cache: "no-store",
                 });
@@ -217,7 +218,7 @@ export default function Pricing() {
                                 return (
                                     <div
                                         key={plan.id}
-                                        className={`relative flex flex-col rounded-2xl border p-6 shadow-sm transition-shadow hover:shadow-lg ${isPopular
+                                        className={`relative flex min-h-[620px] flex-col rounded-2xl border p-6 shadow-sm transition-shadow hover:shadow-lg ${isPopular
                                                 ? "border-primary/50 bg-primary/5"
                                                 : "border-border bg-card"
                                             }`}
@@ -251,7 +252,7 @@ export default function Pricing() {
                                         </div>
 
                                         {featureLines.length > 0 && (
-                                            <ul className="mt-6 space-y-3">
+                                            <ul className="mt-6 flex-1 space-y-3">
                                                 {featureLines.map((line) => (
                                                     <li
                                                         key={line}
@@ -264,21 +265,26 @@ export default function Pricing() {
                                             </ul>
                                         )}
 
-                                        {plan.trialPeriodDays && plan.trialPeriodDays > 0 && (
-                                            <p className="mt-4 text-xs text-muted-foreground">
-                                                Includes {plan.trialPeriodDays}-day free trial
-                                            </p>
-                                        )}
+                                        <div className="mt-auto pt-8">
+                                            <Link
+                                                href="/create-account"
+                                                className={`inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition-all active:scale-[0.98] ${isPopular
+                                                        ? "bg-primary text-white hover:bg-primary/90"
+                                                        : "border border-border bg-background text-foreground hover:bg-muted"
+                                                    }`}
+                                            >
+                                                {plan.trialPeriodDays && plan.trialPeriodDays > 0
+                                                    ? `Start ${plan.trialPeriodDays}-day free trial`
+                                                    : "Start now"}
+                                                <ArrowRight className="h-4 w-4" />
+                                            </Link>
 
-                                        <Link
-                                            href="/create-account"
-                                            className={`mt-8 inline-flex w-full items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-all active:scale-[0.98] ${isPopular
-                                                    ? "bg-primary text-white hover:bg-primary/90"
-                                                    : "border border-border bg-background text-foreground hover:bg-muted"
-                                                }`}
-                                        >
-                                            View pricing
-                                        </Link>
+                                            {plan.trialPeriodDays && plan.trialPeriodDays > 0 && (
+                                                <p className="mt-3 text-center text-xs font-medium text-muted-foreground">
+                                                    $0.00 due today. No card required.
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
                                 );
                             })}

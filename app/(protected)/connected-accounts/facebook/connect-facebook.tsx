@@ -8,6 +8,7 @@ import { CheckCircle2, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { invalidateAccountData } from "@/lib/client-data";
 import { config } from "@/util/config";
 
 type ConnectionState = "loading" | "success" | "error";
@@ -133,6 +134,7 @@ export default function FacebookCallback() {
                     );
                 }
 
+                invalidateAccountData();
                 setState("success");
                 setMessage(data?.message || "Your Facebook account has been connected.");
             } catch (err) {

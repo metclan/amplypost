@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import DeleteConfirmationModal from "@/app/components/delete-confirmation-modal";
+import { backendApiUrl } from "@/util/backend-api";
 
 type TemplateCategory = {
   id: string;
@@ -103,7 +104,7 @@ export default function ImageTemplatesManager() {
   async function fetchCategories() {
     try {
       setLoadingCategories(true);
-      const response = await fetch("/api/admin/template-categories", { cache: "no-store" });
+      const response = await fetch(backendApiUrl("admin/template-categories"), { cache: "no-store" });
       const data = await response.json();
 
       if (!response.ok) {
@@ -131,7 +132,7 @@ export default function ImageTemplatesManager() {
         params.set("categoryId", targetCategoryId);
       }
 
-      const response = await fetch(`/api/admin/image-templates?${params.toString()}`, {
+      const response = await fetch(backendApiUrl(`admin/image-templates?${params.toString()}`), {
         cache: "no-store",
       });
       const data = await response.json();
@@ -240,7 +241,7 @@ export default function ImageTemplatesManager() {
   }
 
   async function uploadTemplateImage(file: File) {
-    const signedResponse = await fetch("/api/uploads", {
+    const signedResponse = await fetch(backendApiUrl("uploads"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -270,7 +271,7 @@ export default function ImageTemplatesManager() {
   }
 
   async function createCategory(name: string) {
-    const response = await fetch("/api/admin/template-categories", {
+    const response = await fetch(backendApiUrl("admin/template-categories"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -329,7 +330,7 @@ export default function ImageTemplatesManager() {
       }
 
       if (editingTemplate) {
-        const response = await fetch(`/api/admin/image-templates/${editingTemplate.id}`, {
+        const response = await fetch(backendApiUrl(`admin/image-templates/${editingTemplate.id}`), {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
@@ -348,7 +349,7 @@ export default function ImageTemplatesManager() {
 
         toast.success("Image template updated");
       } else {
-        const response = await fetch("/api/admin/image-templates", {
+        const response = await fetch(backendApiUrl("admin/image-templates"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -390,7 +391,7 @@ export default function ImageTemplatesManager() {
       }
 
       if (editingCategory) {
-        const response = await fetch(`/api/admin/template-categories/${editingCategory.id}`, {
+        const response = await fetch(backendApiUrl(`admin/template-categories/${editingCategory.id}`), {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
@@ -430,7 +431,7 @@ export default function ImageTemplatesManager() {
       let nextFilter = selectedCategoryFilter;
 
       if (confirmation.type === "template") {
-        const response = await fetch(`/api/admin/image-templates/${confirmation.id}`, {
+        const response = await fetch(backendApiUrl(`admin/image-templates/${confirmation.id}`), {
           method: "DELETE",
         });
         const data = await response.json();
@@ -446,7 +447,7 @@ export default function ImageTemplatesManager() {
 
         toast.success("Image template deleted");
       } else {
-        const response = await fetch(`/api/admin/template-categories/${confirmation.id}`, {
+        const response = await fetch(backendApiUrl(`admin/template-categories/${confirmation.id}`), {
           method: "DELETE",
         });
         const data = await response.json();

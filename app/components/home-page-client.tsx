@@ -10,6 +10,7 @@ import {
     LayoutDashboard,
     Link2,
     LockKeyhole,
+    Menu,
     Play,
     Send,
     ShieldCheck,
@@ -22,6 +23,7 @@ import {
 import ThemeToggle from "./theme-toggle";
 import Pricing from "./pricing";
 import { platforms } from "@/lib/platforms";
+import { backendAuthUrl } from "@/util/backend-api";
 
 const DEMO_VIDEO_ID = process.env.NEXT_PUBLIC_AMPLYPOST_DEMO_VIDEO_ID;
 
@@ -267,13 +269,14 @@ function BrowserMockup({
 
 export default function HomePageClient() {
     const [user, setUser] = useState<AuthUser | null>(null);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     useEffect(() => {
         let ignore = false;
 
         async function getUser() {
             try {
-                const response = await fetch("/api/auth/get-session", {
+                const response = await fetch(backendAuthUrl("auth/get-session"), {
                     credentials: "include",
                 });
 
@@ -339,9 +342,50 @@ export default function HomePageClient() {
                         <Link href={user ? "/dashboard" : "/create-account"} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-primary/90">
                             {user ? "Dashboard" : "Try free"}
                         </Link>
-                        <ThemeToggle showLabel={false} />
+                        <button
+                            type="button"
+                            onClick={() => setIsMobileMenuOpen((value) => !value)}
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-background text-foreground shadow-sm hover:bg-accent"
+                            aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+                        >
+                            {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                        </button>
                     </div>
                 </nav>
+
+                {isMobileMenuOpen && (
+                    <div className="border-t border-border px-4 py-4 lg:hidden">
+                        <div className="mx-auto max-w-7xl space-y-2">
+                            {[
+                                ["Pricing", "#pricing"],
+                                ["Features", "#features"],
+                                ["How it Works", "#how-it-works"],
+                                ["FAQ", "#faq"],
+                            ].map(([label, href]) => (
+                                <a
+                                    key={label}
+                                    href={href}
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    className="block rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                                >
+                                    {label}
+                                </a>
+                            ))}
+                            <div className="border-t border-border pt-3">
+                                <ThemeToggle />
+                            </div>
+                            {!user && (
+                                <Link
+                                    href="/login"
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    className="block rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                                >
+                                    Login
+                                </Link>
+                            )}
+                        </div>
+                    </div>
+                )}
             </header>
 
             <main>

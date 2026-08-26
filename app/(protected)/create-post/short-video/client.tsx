@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { DateTimePicker } from "@/components/ui/date-and-time-picker";
 import { Button } from "@/components/ui/button";
 import EmojiPicker, { EmojiClickData, Theme } from "emoji-picker-react";
@@ -24,9 +25,29 @@ import PostSuccessDialog from "../post-success-dialog";
 import { generateAICaption } from "@/lib/generate-ai-caption";
 import Link from "next/link";
 import { fetchConnectedAccounts, type ConnectedAccount } from "../accounts";
+import { SubscriptionRequiredError, parseApiErrorResponse } from "@/lib/client-errors";
+import { useWorkspace } from "@/app/components/workspace-provider";
+import { accountBelongsToWorkspace } from "@/lib/workspaces";
+import { backendApiUrl } from "@/util/backend-api";
 
 type MediaKind = "image" | "video";
 type StoryPublishMode = "feed" | "feed_and_story" | "story_only";
+type CaptionMode = "same" | "smart" | "different";
+
+const DEFAULT_CAPTION_LIMIT = 2200;
+const PLATFORM_CAPTION_LIMITS: Record<string, number> = {
+    bluesky: 300,
+    facebook: 63206,
+    instagram: 2200,
+    linkedin: 3000,
+    pinterest: 800,
+    threads: 500,
+    tiktok: 2200,
+    x: 280,
+    youtube: 5000,
+    "google-business-profile": 1500,
+    google_business_profile: 1500,
+};
 
 interface MediaFileItem {
     id: number;
@@ -149,7 +170,9 @@ function ToggleSwitch({
 }
 
 export default function ShortVideoClient() {
-    const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
+    const router = useRouter();
+    const { selectedWorkspace } = useWorkspace();
+    const [allAccounts, setAllAccounts] = useState<ConnectedAccount[]>([]);
     const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
     const [caption, setCaption] = useState("");
     const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
@@ -169,8 +192,9 @@ export default function ShortVideoClient() {
     const [isPublishing, setIsPublishing] = useState(false);
     const [publishError, setPublishError] = useState<string | null>(null);
     const [storyPublishMode, setStoryPublishMode] = useState<StoryPublishMode>("feed");
-    const [useSameCaption, setUseSameCaption] = useState(true);
+    const [captionMode, setCaptionMode] = useState<CaptionMode>("same");
     const [accountCaptions, setAccountCaptions] = useState<Record<string, string>>({});
+    const [platformCaptions, setPlatformCaptions] = useState<Record<string, string>>({});
     const [scheduleOption, setScheduleOption] = useState<'now' | 'later'>('now');
     const [scheduledDateTime, setScheduledDateTime] = useState<Date | undefined>(undefined);
     const [scheduledTime, setScheduledTime] = useState('');
@@ -197,7 +221,7 @@ export default function ShortVideoClient() {
     const fetchAccounts = useCallback(async () => {
         try {
             setIsLoadingAccounts(true);
-            setAccounts(await fetchConnectedAccounts());
+            setAllAccounts(await fetchConnectedAccounts());
         } catch (error) {
             console.error("Failed to fetch connected accounts:", error);
         } finally {
@@ -205,10 +229,34 @@ export default function ShortVideoClient() {
         }
     }, []);
 
+    const accounts = useMemo(
+        () => allAccounts.filter((account) => accountBelongsToWorkspace(account.id, selectedWorkspace)),
+        [allAccounts, selectedWorkspace],
+    );
+
     // Fetch connected accounts
     useEffect(() => {
         fetchAccounts();
     }, [fetchAccounts]);
+
+    useEffect(() => {
+        const availableAccountIds = new Set(accounts.map((account) => account.id));
+
+        setSelectedAccounts((currentSelectedAccounts) =>
+            currentSelectedAccounts.filter((accountId) => availableAccountIds.has(accountId)),
+        );
+        setAccountCaptions((currentCaptions) =>
+            Object.fromEntries(
+                Object.entries(currentCaptions).filter(([accountId]) => availableAccountIds.has(accountId)),
+            ),
+        );
+        setPlatformCaptions((currentCaptions) => {
+            const availablePlatformIds = new Set(accounts.map((account) => getPlatformId(account.provider)));
+            return Object.fromEntries(
+                Object.entries(currentCaptions).filter(([platformId]) => availablePlatformIds.has(platformId)),
+            );
+        });
+    }, [accounts]);
 
     useEffect(() => {
         previewUrlsRef.current = mediaPreviews.map((preview) => preview.url);
@@ -242,13 +290,22 @@ export default function ShortVideoClient() {
     };
 
     const handleHashtagSelect = (tagString: string, target: string | null = activeHashtagTarget) => {
-        if (target && target !== "shared") {
+        if (target?.startsWith("platform:")) {
+            const platformId = target.replace("platform:", "");
+            const limit = getCaptionLimitForProvider(platformId);
+            setPlatformCaptions((prev) => ({
+                ...prev,
+                [platformId]: appendHashtag(prev[platformId] ?? getDefaultPlatformCaption(platformId), tagString).slice(0, limit),
+            }));
+        } else if (target && target !== "shared") {
+            const account = selectedAccountObjects.find((value) => value.id === target);
+            const limit = account ? getCaptionLimitForProvider(account.provider) : DEFAULT_CAPTION_LIMIT;
             setAccountCaptions((prev) => ({
                 ...prev,
-                [target]: appendHashtag(prev[target] ?? "", tagString),
+                [target]: appendHashtag(prev[target] ?? "", tagString).slice(0, limit),
             }));
         } else {
-            setCaption((prev) => appendHashtag(prev, tagString));
+            setCaption((prev) => appendHashtag(prev, tagString).slice(0, getSharedCaptionLimit()));
         }
         setActiveHashtagTarget(null);
     };
@@ -256,13 +313,22 @@ export default function ShortVideoClient() {
     const appendEmoji = (value: string, emoji: string) => `${value}${emoji}`;
 
     const handleEmojiSelect = (emojiData: EmojiClickData, target: string | null = activeEmojiTarget) => {
-        if (target && target !== "shared") {
+        if (target?.startsWith("platform:")) {
+            const platformId = target.replace("platform:", "");
+            const limit = getCaptionLimitForProvider(platformId);
+            setPlatformCaptions((prev) => ({
+                ...prev,
+                [platformId]: appendEmoji(prev[platformId] ?? getDefaultPlatformCaption(platformId), emojiData.emoji).slice(0, limit),
+            }));
+        } else if (target && target !== "shared") {
+            const account = selectedAccountObjects.find((value) => value.id === target);
+            const limit = account ? getCaptionLimitForProvider(account.provider) : DEFAULT_CAPTION_LIMIT;
             setAccountCaptions((prev) => ({
                 ...prev,
-                [target]: appendEmoji(prev[target] ?? "", emojiData.emoji),
+                [target]: appendEmoji(prev[target] ?? "", emojiData.emoji).slice(0, limit),
             }));
         } else {
-            setCaption((prev) => appendEmoji(prev, emojiData.emoji));
+            setCaption((prev) => appendEmoji(prev, emojiData.emoji).slice(0, getSharedCaptionLimit()));
         }
         setCaptionGenerationError(null);
         setActiveEmojiTarget(null);
@@ -270,6 +336,58 @@ export default function ShortVideoClient() {
 
     const selectedAccountObjects = accounts.filter((account) => selectedAccounts.includes(account.id));
     const getPlatformId = (provider: string) => provider.trim().toLowerCase();
+    const getCaptionLimitForProvider = (provider: string) =>
+        PLATFORM_CAPTION_LIMITS[getPlatformId(provider)] ?? DEFAULT_CAPTION_LIMIT;
+    const getSharedCaptionLimit = () => {
+        if (selectedAccountObjects.length === 0) {
+            return DEFAULT_CAPTION_LIMIT;
+        }
+
+        return Math.max(...selectedAccountObjects.map((account) => getCaptionLimitForProvider(account.provider)));
+    };
+    const getMinimumSelectedCaptionLimit = () => {
+        if (selectedAccountObjects.length === 0) {
+            return DEFAULT_CAPTION_LIMIT;
+        }
+
+        return Math.min(...selectedAccountObjects.map((account) => getCaptionLimitForProvider(account.provider)));
+    };
+    const getDefaultPlatformCaption = (platformId: string) =>
+        caption.slice(0, getCaptionLimitForProvider(platformId));
+    const getPlatformCaption = (platformId: string) =>
+        platformCaptions[platformId] ?? getDefaultPlatformCaption(platformId);
+    const clampCaptionForAccount = (account: ConnectedAccount, value: string) =>
+        value.slice(0, getCaptionLimitForProvider(account.provider));
+    const syncSharedCaptionToAccounts = (value: string) => {
+        setAccountCaptions((prev) => {
+            const next = { ...prev };
+            selectedAccountObjects.forEach((account) => {
+                next[account.id] = clampCaptionForAccount(account, value);
+            });
+            return next;
+        });
+    };
+    const syncSharedCaptionToLimitedPlatforms = (value: string) => {
+        setPlatformCaptions((prev) => {
+            const next = { ...prev };
+            selectedAccountObjects.forEach((account) => {
+                const platformId = getPlatformId(account.provider);
+                const limit = getCaptionLimitForProvider(account.provider);
+                if (value.length > limit && !next[platformId]) {
+                    next[platformId] = value.slice(0, limit);
+                }
+            });
+            return next;
+        });
+    };
+    const platformsNeedingSmartCaptions = Array.from(
+        new Map(
+            selectedAccountObjects
+                .filter((account) => caption.length > getCaptionLimitForProvider(account.provider))
+                .map((account) => [getPlatformId(account.provider), account]),
+        ).values(),
+    );
+    const needsSmartCaptionSplit = platformsNeedingSmartCaptions.length > 0;
     const selectedVideoCount = mediaFiles.filter((media) => media.type === "video").length;
     const selectedImageCount = mediaFiles.filter((media) => media.type === "image").length;
     const hasMultipleVideos = selectedVideoCount > 1;
@@ -286,6 +404,10 @@ export default function ShortVideoClient() {
         .filter((account) => isAccountDisabledByMedia(account.provider))
         .map((account) => account.id);
     const getHashtagPlatformForTarget = (target: string) => {
+        if (target.startsWith("platform:")) {
+            return target.replace("platform:", "");
+        }
+
         if (target === "shared") {
             const selectedPlatforms = new Set(selectedAccountObjects.map((account) => getPlatformId(account.provider)));
             return selectedPlatforms.size === 1 ? Array.from(selectedPlatforms)[0] : undefined;
@@ -332,10 +454,19 @@ export default function ShortVideoClient() {
     }, [accounts, hasMultipleVideos, isInvalidForYouTube]);
 
     useEffect(() => {
-        if (!canUseDifferentCaptions && !useSameCaption) {
-            setUseSameCaption(true);
+        if (!canUseDifferentCaptions && captionMode !== "same") {
+            setCaptionMode("same");
         }
-    }, [canUseDifferentCaptions, useSameCaption]);
+    }, [canUseDifferentCaptions, captionMode]);
+
+    useEffect(() => {
+        if (captionMode !== "same" || !canUseDifferentCaptions || !needsSmartCaptionSplit) {
+            return;
+        }
+
+        syncSharedCaptionToLimitedPlatforms(caption);
+        setCaptionMode("smart");
+    }, [canUseDifferentCaptions, caption, captionMode, needsSmartCaptionSplit]);
 
     const openHashtagModal = (target: string) => {
         setActiveHashtagTarget(target);
@@ -402,7 +533,7 @@ export default function ShortVideoClient() {
                 postType: "short-video",
             });
 
-            setCaption(generatedCaption);
+            setCaption(generatedCaption.slice(0, getSharedCaptionLimit()));
         } catch (error) {
             setCaptionGenerationError(
                 error instanceof Error ? error.message : "Failed to generate caption."
@@ -426,8 +557,20 @@ export default function ShortVideoClient() {
         agreedToTerms: false,
     });
 
-    const getCaptionForAccount = (accountId: string) =>
-        useSameCaption ? caption.trim() : getAccountCaption(accountId).trim();
+    const getCaptionForAccount = (accountId: string) => {
+        const account = selectedAccountObjects.find((value) => value.id === accountId);
+        const platformId = account ? getPlatformId(account.provider) : "";
+
+        if (captionMode === "different") {
+            return getAccountCaption(accountId).trim();
+        }
+
+        if (captionMode === "smart" && account && caption.length > getCaptionLimitForProvider(account.provider)) {
+            return getPlatformCaption(platformId).trim();
+        }
+
+        return caption.trim();
+    };
 
     const getDefaultYouTubeConfig = (accountId: string): YouTubeConfigState => {
         const accountCaption = getCaptionForAccount(accountId);
@@ -506,7 +649,7 @@ export default function ShortVideoClient() {
 
         try {
             const fileName = renameFileWithTimestamp(media.file);
-            const response = await fetch('/api/uploads', {
+            const response = await fetch(backendApiUrl("uploads"), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -516,7 +659,7 @@ export default function ShortVideoClient() {
             });
 
             if (!response.ok) {
-                throw new Error('Failed to get upload URL');
+                await parseApiErrorResponse(response, "Failed to get upload URL");
             }
 
             const result = await response.json();
@@ -573,6 +716,12 @@ export default function ShortVideoClient() {
                 return next;
             });
         } catch (error) {
+            if (error instanceof SubscriptionRequiredError) {
+                setUploadError(error.message);
+                router.push("/subscribe");
+                return;
+            }
+
             if (error instanceof Error && (error.message === 'Upload cancelled' || error.name === 'AbortError')) {
                 return;
             }
@@ -728,7 +877,7 @@ export default function ShortVideoClient() {
             const uploaded = uploadedMedia.get(mediaPendingRemoval.id);
 
             if (uploaded) {
-                const response = await fetch('/api/uploads', {
+                const response = await fetch(backendApiUrl("uploads"), {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json',
@@ -740,8 +889,7 @@ export default function ShortVideoClient() {
                 });
 
                 if (!response.ok) {
-                    const error = await response.json().catch(() => null) as { message?: string } | null;
-                    throw new Error(error?.message || 'Failed to remove media from storage.');
+                    await parseApiErrorResponse(response, "Failed to remove media from storage.");
                 }
             }
 
@@ -749,6 +897,11 @@ export default function ShortVideoClient() {
             setMediaPendingRemoval(null);
         } catch (error) {
             console.error('Delete media error:', error);
+            if (error instanceof SubscriptionRequiredError) {
+                setUploadError(error.message);
+                router.push("/subscribe");
+                return;
+            }
             setUploadError(error instanceof Error ? error.message : 'Failed to remove media. Please try again.');
         } finally {
             setIsDeletingMedia(false);
@@ -773,7 +926,8 @@ export default function ShortVideoClient() {
     const resetComposerForm = () => {
         setCaption('');
         setAccountCaptions({});
-        setUseSameCaption(true);
+        setPlatformCaptions({});
+        setCaptionMode("same");
         setStoryPublishMode('feed');
         setSelectedAccounts([]);
         setTikTokConfigs({});
@@ -802,6 +956,13 @@ export default function ShortVideoClient() {
 
         if (uploadedMedia.size !== mediaFiles.length || uploadingIds.size > 0) {
             setPublishError('Please wait for all media to finish uploading');
+            return;
+        }
+
+        if (captionMode === "same" && canUseDifferentCaptions && needsSmartCaptionSplit) {
+            syncSharedCaptionToLimitedPlatforms(caption);
+            setCaptionMode("smart");
+            setPublishError("Some selected platforms need shorter captions. Review the smart split captions.");
             return;
         }
 
@@ -855,6 +1016,23 @@ export default function ShortVideoClient() {
         }
         if (selectedYouTubeAccounts.length > 0) {
             setShowYouTubeValidationErrors(true);
+        }
+
+        if (captionMode === "same" && canUseDifferentCaptions && needsSmartCaptionSplit) {
+            syncSharedCaptionToLimitedPlatforms(caption);
+            setCaptionMode("smart");
+            setPublishError("Some selected platforms need shorter captions. Review the smart split captions.");
+            return;
+        }
+
+        for (const account of selectedAccountObjects) {
+            const accountCaption = getCaptionForAccount(account.id);
+            const accountCaptionLimit = getCaptionLimitForProvider(account.provider);
+
+            if (accountCaption.length > accountCaptionLimit) {
+                setPublishError(`${account.account_name} caption must be ${accountCaptionLimit} characters or less.`);
+                return;
+            }
         }
 
         for (const account of selectedTikTokAccounts) {
@@ -952,7 +1130,7 @@ export default function ShortVideoClient() {
                 scheduledTimezone: scheduledTimezoneValue,
             };
 
-            const response = await fetch('/api/posts', {
+            const response = await fetch(backendApiUrl("posts"), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -961,8 +1139,7 @@ export default function ShortVideoClient() {
             });
 
             if (!response.ok) {
-                const error = await response.json().catch(() => null) as { error?: string; message?: string } | null;
-                throw new Error(error?.error || error?.message || 'Failed to publish');
+                await parseApiErrorResponse(response, "Failed to publish");
             }
 
             await response.json().catch(() => null);
@@ -970,6 +1147,11 @@ export default function ShortVideoClient() {
             setShowSuccessDialog(true);
         } catch (error) {
             console.error('Publish error:', error);
+            if (error instanceof SubscriptionRequiredError) {
+                setPublishError(error.message);
+                router.push("/subscribe");
+                return;
+            }
             setPublishError(error instanceof Error ? error.message : 'Failed to publish post');
         } finally {
             setIsPublishing(false);
@@ -1000,6 +1182,9 @@ export default function ShortVideoClient() {
                 <h1 className="text-3xl font-bold tracking-tight">Create Post</h1>
                 <p className="mt-2 text-sm text-muted-foreground">
                     Upload images or videos, customize your content and schedule it.
+                </p>
+                <p className="mt-1 text-xs font-medium text-muted-foreground">
+                    Workspace: {selectedWorkspace ? selectedWorkspace.name : "All accounts"}
                 </p>
             </div>
 
@@ -1223,7 +1408,7 @@ export default function ShortVideoClient() {
                                 <Button
                                     type="button"
                                     onClick={handleGenerateCaption}
-                                    disabled={isGeneratingCaption || !useSameCaption || !canEditCaption}
+                                    disabled={isGeneratingCaption || captionMode === "different" || !canEditCaption}
                                     className="cursor-pointer border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
                                 >
                                     {isGeneratingCaption ? (
@@ -1240,7 +1425,7 @@ export default function ShortVideoClient() {
                                     <p className="text-sm font-medium text-foreground">Caption mode</p>
                                     <p className="mt-0.5 text-xs text-muted-foreground">
                                         {canUseDifferentCaptions
-                                            ? "Use one caption, or customize captions per account."
+                                            ? "Use one caption, split only limited platforms, or customize every account."
                                             : "Select at least two accounts to write different captions."}
                                     </p>
                                 </div>
@@ -1252,9 +1437,12 @@ export default function ShortVideoClient() {
                                     <button
                                         type="button"
                                         disabled={!canUseDifferentCaptions}
-                                        onClick={() => setUseSameCaption(true)}
+                                        onClick={() => {
+                                            setCaption((value) => value.slice(0, getMinimumSelectedCaptionLimit()));
+                                            setCaptionMode("same");
+                                        }}
                                         className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed ${
-                                            useSameCaption
+                                            captionMode === "same"
                                                 ? "bg-violet-600 text-white"
                                                 : "text-muted-foreground hover:bg-background hover:text-foreground"
                                         }`}
@@ -1264,9 +1452,27 @@ export default function ShortVideoClient() {
                                     <button
                                         type="button"
                                         disabled={!canUseDifferentCaptions}
-                                        onClick={() => setUseSameCaption(false)}
+                                        onClick={() => {
+                                            syncSharedCaptionToLimitedPlatforms(caption);
+                                            setCaptionMode("smart");
+                                        }}
                                         className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed ${
-                                            !useSameCaption
+                                            captionMode === "smart"
+                                                ? "bg-violet-600 text-white"
+                                                : "text-muted-foreground hover:bg-background hover:text-foreground"
+                                        }`}
+                                    >
+                                        Smart split
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={!canUseDifferentCaptions}
+                                        onClick={() => {
+                                            syncSharedCaptionToAccounts(caption);
+                                            setCaptionMode("different");
+                                        }}
+                                        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed ${
+                                            captionMode === "different"
                                                 ? "bg-violet-600 text-white"
                                                 : "text-muted-foreground hover:bg-background hover:text-foreground"
                                         }`}
@@ -1276,18 +1482,19 @@ export default function ShortVideoClient() {
                                 </div>
                             </div>
 
-                            {useSameCaption ? (
+                            {captionMode === "same" || captionMode === "smart" ? (
+                                <div className="space-y-3">
                                 <div className="rounded-xl border border-border bg-card shadow-sm">
                                     <textarea
                                         value={caption}
                                         onChange={(e) => {
-                                            setCaption(e.target.value);
+                                            setCaption(e.target.value.slice(0, getSharedCaptionLimit()));
                                             setCaptionGenerationError(null);
                                         }}
                                         disabled={!canEditCaption}
-                                        placeholder={canEditCaption ? "Write one caption for all selected accounts..." : "Select an account to write a caption..."}
+                                        placeholder={canEditCaption ? "Write the main caption..." : "Select an account to write a caption..."}
                                         className="min-h-[170px] w-full resize-none rounded-t-xl border-0 bg-transparent p-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed disabled:opacity-55"
-                                        maxLength={2200}
+                                        maxLength={getSharedCaptionLimit()}
                                     />
                                     <div className="flex items-center justify-between border-t border-border px-3 py-2 text-muted-foreground">
                                         <div className="flex items-center gap-1">
@@ -1302,13 +1509,56 @@ export default function ShortVideoClient() {
                                                 <Type className="h-4 w-4" />
                                             </button>
                                         </div>
-                                        <p className="text-xs">{caption.length} / 2200</p>
+                                        <p className="text-xs">{caption.length} / {getSharedCaptionLimit()}</p>
                                     </div>
+                                </div>
+                                    {captionMode === "smart" && platformsNeedingSmartCaptions.map((account) => {
+                                        const platformId = getPlatformId(account.provider);
+                                        const platformCaptionLimit = getCaptionLimitForProvider(account.provider);
+                                        const platformCaption = getPlatformCaption(platformId);
+
+                                        return (
+                                            <div key={platformId} className="rounded-xl border border-border bg-card shadow-sm">
+                                                <div className="border-b border-border px-4 py-3">
+                                                    <p className="text-sm font-semibold text-foreground">{account.provider}</p>
+                                                    <p className="text-xs text-muted-foreground">Required because the main caption is over this platform limit.</p>
+                                                </div>
+                                                <textarea
+                                                    value={platformCaption}
+                                                    onChange={(e) => {
+                                                        setPlatformCaptions((prev) => ({
+                                                            ...prev,
+                                                            [platformId]: e.target.value.slice(0, platformCaptionLimit),
+                                                        }));
+                                                        setCaptionGenerationError(null);
+                                                    }}
+                                                    placeholder={`Write a shorter caption for ${account.provider}...`}
+                                                    className="min-h-[130px] w-full resize-none border-0 bg-transparent p-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                                                    maxLength={platformCaptionLimit}
+                                                />
+                                                <div className="flex items-center justify-between border-t border-border px-3 py-2 text-muted-foreground">
+                                                    <div className="flex items-center gap-1">
+                                                        {renderEmojiPicker(`platform:${platformId}`)}
+                                                        {renderHashtagPicker(`platform:${platformId}`)}
+                                                        <button
+                                                            type="button"
+                                                            className="cursor-pointer rounded-md p-2 hover:bg-muted"
+                                                            aria-label="Text tools"
+                                                        >
+                                                            <Type className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+                                                    <p className="text-xs">{platformCaption.length} / {platformCaptionLimit}</p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             ) : (
                                 <div className="space-y-3">
                                     {selectedAccountObjects.map((account) => {
                                         const accountCaption = getAccountCaption(account.id);
+                                        const accountCaptionLimit = getCaptionLimitForProvider(account.provider);
 
                                         return (
                                             <div key={account.id} className="rounded-xl border border-border bg-card shadow-sm">
@@ -1319,12 +1569,12 @@ export default function ShortVideoClient() {
                                                 <textarea
                                                     value={accountCaption}
                                                     onChange={(e) => {
-                                                        handleAccountCaptionChange(account.id, e.target.value);
+                                                        handleAccountCaptionChange(account.id, e.target.value.slice(0, accountCaptionLimit));
                                                         setCaptionGenerationError(null);
                                                     }}
                                                     placeholder={`Write a caption for ${account.account_name}...`}
                                                     className="min-h-[130px] w-full resize-none border-0 bg-transparent p-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-                                                    maxLength={2200}
+                                                    maxLength={accountCaptionLimit}
                                                 />
                                                 <div className="flex items-center justify-between border-t border-border px-3 py-2 text-muted-foreground">
                                                     <div className="flex items-center gap-1">
@@ -1338,7 +1588,7 @@ export default function ShortVideoClient() {
                                                             <Type className="h-4 w-4" />
                                                         </button>
                                                     </div>
-                                                    <p className="text-xs">{accountCaption.length} / 2200</p>
+                                                    <p className="text-xs">{accountCaption.length} / {accountCaptionLimit}</p>
                                                 </div>
                                             </div>
                                         );

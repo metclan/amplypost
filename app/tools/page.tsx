@@ -40,7 +40,7 @@ const tools: Tool[] = [
         description:
             "Download TikTok videos without watermark in HD quality. Just paste the link and download instantly.",
         href: "/tools/tiktok-downloader",
-        icon: "/tiktok-logo.svg",
+        icon: "/tiktok-logo.png",
         badge: "Free",
         category: "downloaders",
     },

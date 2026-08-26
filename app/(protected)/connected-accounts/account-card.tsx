@@ -15,17 +15,19 @@ interface AccountCardProps {
 }
 
 // Get provider logo
-const getProviderLogo = (provider: string) => {
+const getPlatformLogo = (provider: string) => {
     const logoMap: Record<string, string> = {
         facebook: "/facebook-logo.svg",
         instagram: "/instagram-logo.svg",
-        tiktok: "/tiktok-logo.svg",
+        tiktok: "/tiktok-logo.png",
         linkedin: "/linkedin-logo.svg",
         youtube: "/youtube-logo.svg",
         pinterest: "/pinterest-logo.svg",
-        twitter: "/twitter-logo.svg",
-        threads: "/thread-logo.svg",
+        twitter: "/twitter-logo.png",
+        threads: "/threads-logo.png",
         bluesky: "/bluesky-logo.svg",
+        "google-business-profile": "/google-my-business-logo.svg",
+        google_business_profile: "/google-my-business-logo.svg",
     };
     return logoMap[provider.toLowerCase()] || "/default-logo.svg";
 };
@@ -42,6 +44,8 @@ const getProviderColor = (provider: string) => {
         twitter: "from-sky-400 to-sky-500",
         threads: "from-sky-400 to-sky-500",
         bluesky: "from-sky-400 to-blue-500",
+        "google-business-profile": "from-blue-500 to-emerald-500",
+        google_business_profile: "from-blue-500 to-emerald-500",
     };
     return colorMap[provider.toLowerCase()] || "from-gray-500 to-gray-600";
 };
@@ -103,7 +107,7 @@ export default function AccountCard({ account, onDelete }: AccountCardProps) {
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-0.5">
                         <Image
-                            src={getProviderLogo(account.provider)}
+                            src={getPlatformLogo(account.provider)}
                             alt={account.provider}
                             width={12}
                             height={12}

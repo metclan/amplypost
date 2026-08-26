@@ -4,6 +4,24 @@ import "./globals.css";
 import { Toaster } from "sonner";
 import { GoogleAnalytics } from '@next/third-parties/google'
 import ThemeProvider from "./components/theme-provider";
+import DataFastAnalytics from "./components/datafast-analytics";
+
+const themeScript = `
+(() => {
+  try {
+    const storedTheme = localStorage.getItem("theme");
+    const theme = storedTheme === "dark" || storedTheme === "light" ? storedTheme : "light";
+    const root = document.documentElement;
+
+    root.classList.remove(theme === "dark" ? "light" : "dark");
+    root.classList.add(theme);
+    root.style.colorScheme = theme;
+  } catch {
+    document.documentElement.classList.add("light");
+    document.documentElement.style.colorScheme = "light";
+  }
+})();
+`;
 
 export const metadata: Metadata = {
   // === Basic ===
@@ -104,6 +122,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         {/* Structured Data - SoftwareApplication */}
          <meta name="facebook-domain-verification" content="f58unlmeqjjlyqcl1kkck5vos94aqw" />
         <script
@@ -141,6 +160,7 @@ export default function RootLayout({
       </head>
       <body>
         <ThemeProvider>
+          <DataFastAnalytics />
           <Toaster position="top-right" richColors />
           {children}
         </ThemeProvider>

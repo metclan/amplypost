@@ -4,12 +4,15 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
+import { backendAuthUrl } from "@/util/backend-api";
 import {
   LayoutDashboard,
   CalendarDays,
+  ClipboardList,
   PenLine,
   Link2,
   CreditCard,
+  BriefcaseBusiness,
   Headphones,
   LogOut,
   Menu,
@@ -18,12 +21,15 @@ import {
   X,
 } from "lucide-react";
 import ThemeToggle from "./theme-toggle";
+import WorkspaceSwitcher from "./workspace-switcher";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Create Post", href: "/create-post", icon: PenLine },
+  { name: "Posts", href: "/posts", icon: ClipboardList },
   { name: "Calendar", href: "/calendar", icon: CalendarDays },
   { name: "Connected Accounts", href: "/connected-accounts", icon: Link2 },
+  { name: "Workspaces", href: "/workspaces", icon: BriefcaseBusiness },
   { name: "Billing", href: "/billing", icon: CreditCard },
 ];
 
@@ -44,7 +50,7 @@ export default function ProtectedSidebar({
     pathname === href || pathname.startsWith(`${href}/`);
 
   const handleLogout = async () => {
-    await fetch("/api/auth/sign-out", {
+    await fetch(backendAuthUrl("auth/sign-out"), {
       method: "POST",
       credentials: "include",
     });
@@ -73,6 +79,10 @@ export default function ProtectedSidebar({
             </div>
           )}
         </Link>
+      </div>
+
+      <div className={collapsed ? "px-3 pb-3" : "px-4 pb-4"}>
+        <WorkspaceSwitcher collapsed={collapsed} />
       </div>
 
       {/* Nav */}
@@ -162,9 +172,6 @@ export default function ProtectedSidebar({
           <span className="text-lg font-bold text-foreground">Amplypost</span>
         </Link>
 
-        <div className="ml-auto min-w-32">
-          <ThemeToggle />
-        </div>
       </div>
 
       {/* Desktop Sidebar */}

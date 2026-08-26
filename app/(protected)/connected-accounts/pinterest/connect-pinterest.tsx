@@ -8,6 +8,7 @@ import { CheckCircle2, ImageIcon, RefreshCw, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { invalidateAccountData } from "@/lib/client-data";
 import { config } from "@/util/config";
 import { connectPinterest } from "@/util/social-connect";
 
@@ -434,6 +435,7 @@ export default function ConnectPinterest() {
 
             const selectedBoard = boards.find((board) => board.id === selectedBoardIds[0]);
 
+            invalidateAccountData();
             setBoards([]);
             setAccount(null);
             setState("success");
@@ -518,6 +520,7 @@ export default function ConnectPinterest() {
                     return;
                 }
 
+                invalidateAccountData();
                 setState("success");
                 setMessage(data?.message || "Your Pinterest account has been connected.");
             } catch (err) {

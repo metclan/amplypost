@@ -3,14 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { backendAuthUrl } from "@/util/backend-api";
 
 export default function LoginForm() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
-    const router = useRouter();
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -18,7 +17,7 @@ export default function LoginForm() {
         setErrorMessage("");
 
         try {
-            const response = await fetch("/api/auth/sign-in/email", {
+            const response = await fetch(backendAuthUrl("auth/sign-in/email"), {
                 method: "POST",
                 headers: {
                     "content-type": "application/json",
@@ -36,8 +35,7 @@ export default function LoginForm() {
                 throw new Error(data?.message ?? "Invalid email or password.");
             }
 
-            router.push("/dashboard");
-            router.refresh();
+            window.location.assign("/dashboard");
         } catch (error) {
             setErrorMessage(
                 error instanceof Error
@@ -148,7 +146,7 @@ export default function LoginForm() {
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className="w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-lg transition-all hover:bg-primary/90 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-primary/90 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isLoading ? "Signing in..." : "Sign in"}
                         </button>

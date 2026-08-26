@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GetAmplypostCard } from "@/app/components/get-amplypost-card";
 import { Button } from "@/components/ui/button";
+import { backendApiUrl } from "@/util/backend-api";
 
 type OutputFormat = "jpeg" | "png" | "webp" | "avif" | "tiff" | "gif" | "heif";
 type SourceMode = "upload" | "url";
@@ -148,7 +149,7 @@ export default function ConvertImage() {
                 body.append("url", urlInput.trim());
             }
 
-            const response = await fetch("/api/tools/convert-image", {
+            const response = await fetch(backendApiUrl("tools/convert-image"), {
                 method: "POST",
                 body,
             });

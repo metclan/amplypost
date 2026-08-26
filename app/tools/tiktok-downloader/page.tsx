@@ -83,7 +83,7 @@ export default function TikTokDownloaderPage() {
                     {/* TikTok icon */}
                     <div className="mx-auto mb-5 flex justify-center">
                         <Image
-                            src="/tiktok-logo.svg"
+                            src="/tiktok-logo.png"
                             alt="TikTok"
                             width={44}
                             height={44}

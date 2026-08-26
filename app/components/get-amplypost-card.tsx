@@ -4,11 +4,11 @@ import Link from "next/link";
 const platforms = [
     { name: "Facebook", src: "/facebook-logo.svg" },
     { name: "Instagram", src: "/instagram-logo.svg" },
-    { name: "TikTok", src: "/tiktok-logo.svg" },
-    { name: "X", src: "/x-logo.svg" },
+    { name: "TikTok", src: "/tiktok-logo.png" },
+    { name: "X", src: "/twitter-logo.png" },
     { name: "YouTube", src: "/youtube-logo.svg" },
     { name: "LinkedIn", src: "/linkedin-logo.svg" },
-    { name: "Threads", src: "/thread-logo.svg" },
+    { name: "Threads", src: "/threads-logo.png" },
 ];
 
 export function GetAmplypostCard() {

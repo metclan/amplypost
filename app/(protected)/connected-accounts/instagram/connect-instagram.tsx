@@ -3,11 +3,13 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { invalidateAccountData } from "@/lib/client-data";
+import { isSubscriptionRequiredError, parseApiErrorResponse } from "@/lib/client-errors";
 import { config } from "@/util/config";
 
 type ConnectionState = "loading" | "success" | "error";
@@ -91,6 +93,7 @@ function StatusPanel({ state, title, message, details }: StatusPanelProps) {
 }
 
 export default function InstagramCallback() {
+    const router = useRouter();
     const searchParams = useSearchParams();
     const code = searchParams.get("code");
     const error = searchParams.get("error");
@@ -123,20 +126,20 @@ export default function InstagramCallback() {
                     body: JSON.stringify({ code }),
                 });
 
-                const data = await response.json().catch(() => null);
-
                 if (!response.ok) {
-                    throw new Error(
-                        data?.message ||
-                        data?.error ||
-                        "Failed to connect Instagram account.",
-                    );
+                    await parseApiErrorResponse(response, "Failed to connect Instagram account.");
                 }
 
+                const data = await response.json().catch(() => null);
+                invalidateAccountData();
                 setState("success");
                 setMessage(data?.message || "Your Instagram account has been connected.");
             } catch (err) {
                 console.error("Error during Instagram authorization:", err);
+                if (isSubscriptionRequiredError(err)) {
+                    router.push("/subscribe");
+                    return;
+                }
                 setState("error");
                 setMessage("We could not connect your Instagram account.");
                 setDetails(err instanceof Error ? err.message : "An unexpected error occurred.");

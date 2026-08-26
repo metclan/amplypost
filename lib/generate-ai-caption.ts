@@ -1,3 +1,5 @@
+import { backendApiUrl } from "@/util/backend-api";
+
 export type CaptionPostType = "image" | "short-video" | "long-video" | "text";
 
 interface GenerateAICaptionParams {
@@ -16,7 +18,7 @@ export async function generateAICaption({
     postType,
     existingCaption,
 }: GenerateAICaptionParams): Promise<string> {
-    const response = await fetch("/api/generate", {
+    const response = await fetch(backendApiUrl("generate"), {
         method: "POST",
         headers: {
             "Content-Type": "application/json",

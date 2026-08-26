@@ -55,7 +55,7 @@ async function proxyAuthRequest(request: NextRequest, context: RouteContext) {
   headers.set("origin", request.nextUrl.origin);
 
   if (!headers.has("referer")) {
-    headers.set("referer", request.nextUrl.origin);
+    headers.set("referer", request.nextUrl.href);
   }
 
   const backendResponse = await fetch(targetUrl, {
@@ -65,6 +65,7 @@ async function proxyAuthRequest(request: NextRequest, context: RouteContext) {
       ? undefined
       : await request.arrayBuffer(),
     redirect: "manual",
+    cache: "no-store",
   });
 
   const responseHeaders = new Headers();

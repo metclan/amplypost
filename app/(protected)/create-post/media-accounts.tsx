@@ -28,7 +28,7 @@ interface MediaAccountsProps {
 }
 
 // Get provider logo
-const getProviderLogo = (provider: string) => {
+const getPlatformLogo = (provider: string) => {
     const logoMap: Record<string, string> = {
         facebook: "/facebook-logo.svg",
         instagram: "/instagram-logo.svg",
@@ -39,6 +39,8 @@ const getProviderLogo = (provider: string) => {
         twitter: "/twitter-logo.png",
         threads: "/threads-logo.png",
         bluesky: "/bluesky-logo.svg",
+        "google-business-profile": "/google-my-business-logo.svg",
+        google_business_profile: "/google-my-business-logo.svg",
     };
     return logoMap[provider.toLowerCase()] || "/default-logo.svg";
 };
@@ -54,6 +56,8 @@ const getProviderColor = (provider: string) => {
         twitter: "from-sky-400 to-sky-500",
         threads: "from-sky-400 to-sky-500",
         bluesky: "from-sky-400 to-blue-500",
+        "google-business-profile": "from-blue-500 to-emerald-500",
+        google_business_profile: "from-blue-500 to-emerald-500",
     };
     return colorMap[provider.toLowerCase()] || "from-gray-500 to-gray-600";
 };
@@ -68,6 +72,8 @@ const getProviderLabel = (provider: string) => {
         twitter: "X (Twitter)",
         threads: "Threads",
         bluesky: "Bluesky",
+        "google-business-profile": "Google Business Profile",
+        google_business_profile: "Google Business Profile",
     };
 
     return labelMap[provider.toLowerCase()] || provider;
@@ -284,7 +290,7 @@ export default function MediaAccounts({
                                         </div>
                                         <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-md border border-border bg-card">
                                             <Image
-                                                src={getProviderLogo(account.provider)}
+                                                src={getPlatformLogo(account.provider)}
                                                 alt={account.provider}
                                                 width={14}
                                                 height={14}
@@ -313,7 +319,7 @@ export default function MediaAccounts({
                                             <>
                                                 <div className="flex items-center gap-1.5 mb-0.5">
                                                     <Image
-                                                        src={getProviderLogo(account.provider)}
+                                                        src={getPlatformLogo(account.provider)}
                                                         alt={account.provider}
                                                         width={14}
                                                         height={14}
@@ -371,7 +377,7 @@ export default function MediaAccounts({
                         )}
                         <Link
                             href="/connected-accounts"
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors cursor-pointer"
+                            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 cursor-pointer"
                         >
                             Connect Accounts
                         </Link>

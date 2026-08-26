@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import ThemeToggle from "./theme-toggle";
+import { backendAuthUrl } from "@/util/backend-api";
 
 type AuthUser = {
     id?: string;
@@ -17,17 +18,21 @@ export default function Navigation() {
 
     useEffect(() => {
         const getUser = async () => {
-            const response = await fetch("/api/auth/get-session", {
-                credentials: "include",
-            });
+            try {
+                const response = await fetch(backendAuthUrl("auth/get-session"), {
+                    credentials: "include",
+                });
 
-            if (!response.ok) {
+                if (!response.ok) {
+                    setUser(null);
+                    return;
+                }
+
+                const data = await response.json();
+                setUser(data?.user ?? null);
+            } catch {
                 setUser(null);
-                return;
             }
-
-            const data = await response.json();
-            setUser(data?.user ?? null);
         };
 
         getUser();
@@ -72,6 +77,12 @@ export default function Navigation() {
                             className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
                         >
                             Tools
+                        </Link>
+                        <Link
+                            href="/blog"
+                            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                            Blog
                         </Link>
                         <ThemeToggle />
 
@@ -149,6 +160,13 @@ export default function Navigation() {
                                 className="block px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground rounded-lg"
                             >
                                 Tools
+                            </Link>
+                            <Link
+                                href="/blog"
+                                onClick={() => setIsMobileMenuOpen(false)}
+                                className="block px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground rounded-lg"
+                            >
+                                Blog
                             </Link>
                             <div className="px-4">
                                 <ThemeToggle />

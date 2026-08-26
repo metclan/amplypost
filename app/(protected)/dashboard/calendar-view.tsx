@@ -1,14 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Bookmark, Clock3, FileText, Heart, MessageCircle, MoreHorizontal, Repeat2, Send, Share2, ThumbsUp, VolumeX, X } from "lucide-react";
 
 import { getDaysInMonth, getFirstDayOfMonth, getMonthName, isToday } from "@/util/date-utils";
+import { useCachedResource } from "@/lib/client-cache";
+import { CACHE_TTL, POSTS_CACHE_PREFIX, getPlatformLogo } from "@/lib/client-data";
+import { backendApiUrl } from "@/util/backend-api";
 
 type PostStatus = "published" | "failed" | "scheduled" | "pending" | "processing" | string;
 
-type CalendarPost = {
+export type CalendarPost = {
     id: string;
     groupId?: string;
     provider: string;
@@ -48,31 +51,11 @@ function getMonthRange(date: Date) {
     return { from: from.toISOString(), to: to.toISOString() };
 }
 
-function getProviderLogo(provider: string) {
-    const normalized = provider.toLowerCase();
-    const logos: Record<string, string> = {
-        facebook: "/facebook-logo.svg",
-        instagram: "/instagram-logo.svg",
-        linkedin: "/linkedin-logo.svg",
-        pinterest: "/pinterest-logo.svg",
-        tiktok: "/tiktok-logo.png",
-        youtube: "/youtube-logo.svg",
-        x: "/twitter-logo.png",
-        twitter: "/twitter-logo.png",
-        threads: "/threads-logo.png",
-        bluesky: "/bluesky-logo.svg",
-        "google-business-profile": "/google-my-business-logo.svg",
-        google_business_profile: "/google-my-business-logo.svg",
-    };
-
-    return logos[normalized] || "/amplypost-logo.png";
-}
-
 function getPostDate(post: CalendarPost) {
     return new Date(post.scheduledFor || post.publishedAt || post.createdAt);
 }
 
-function getStatusClasses(status: PostStatus) {
+export function getStatusClasses(status: PostStatus) {
     switch (status) {
         case "scheduled":
             return "border-blue-500/25 bg-blue-500/10 text-blue-700 hover:bg-blue-500/15 dark:text-blue-200";
@@ -121,7 +104,7 @@ function getMediaUrls(raw: RawPost, mediaType: "image" | "video") {
     });
 }
 
-function normalizePost(raw: RawPost): CalendarPost {
+export function normalizePost(raw: RawPost): CalendarPost {
     const imageUrlStrings = getStringArray(raw, "imageUrls") ?? getStringArray(raw, "image_urls") ?? [];
     const videoUrlStrings = getStringArray(raw, "videoUrls") ?? getStringArray(raw, "video_urls") ?? [];
     const imageUrls = imageUrlStrings.length > 0 ? imageUrlStrings : getMediaUrls(raw, "image");
@@ -192,7 +175,7 @@ function InstagramPreview({ post }: { post: CalendarPost }) {
                     <div className="flex items-center gap-3">
                         <span className="rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 p-0.5">
                             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black p-1">
-                                <Image src={getProviderLogo(post.provider)} alt={post.provider} width={26} height={26} className="h-6 w-6 object-contain" />
+                                <Image src={getPlatformLogo(post.provider)} alt={post.provider} width={26} height={26} className="h-6 w-6 object-contain" />
                             </span>
                         </span>
                         <div>
@@ -230,7 +213,7 @@ function FacebookPreview({ post }: { post: CalendarPost }) {
     return (
         <div className="mx-auto max-w-[520px] rounded-2xl border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center gap-3">
-                <Image src={getProviderLogo(post.provider)} alt={post.provider} width={42} height={42} className="h-10 w-10 rounded-full object-contain" />
+                <Image src={getPlatformLogo(post.provider)} alt={post.provider} width={42} height={42} className="h-10 w-10 rounded-full object-contain" />
                 <div>
                     <p className="font-semibold text-foreground">{getProviderName(post)}</p>
                     <p className="text-xs text-muted-foreground">Just now · Public</p>
@@ -254,7 +237,7 @@ function XPreview({ post }: { post: CalendarPost }) {
     return (
         <div className="mx-auto max-w-[520px] rounded-2xl border border-border bg-card p-4 shadow-sm">
             <div className="flex gap-3">
-                <Image src={getProviderLogo(post.provider)} alt={post.provider} width={42} height={42} className="h-10 w-10 rounded-full object-contain" />
+                <Image src={getPlatformLogo(post.provider)} alt={post.provider} width={42} height={42} className="h-10 w-10 rounded-full object-contain" />
                 <div className="min-w-0 flex-1">
                     <p className="font-bold text-foreground">{getProviderName(post)} <span className="font-normal text-muted-foreground">@{post.provider} · now</span></p>
                     {post.caption && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">{post.caption}</p>}
@@ -278,7 +261,7 @@ function LinkedInPreview({ post }: { post: CalendarPost }) {
         <div className="mx-auto max-w-[540px] rounded-2xl border border-border bg-card shadow-sm">
             <div className="p-4">
                 <div className="flex items-center gap-3">
-                    <Image src={getProviderLogo(post.provider)} alt={post.provider} width={44} height={44} className="h-11 w-11 rounded-md object-contain" />
+                    <Image src={getPlatformLogo(post.provider)} alt={post.provider} width={44} height={44} className="h-11 w-11 rounded-md object-contain" />
                     <div>
                         <p className="font-semibold text-foreground">{getProviderName(post)}</p>
                         <p className="text-xs text-muted-foreground">Company page · now</p>
@@ -325,7 +308,7 @@ function PinterestPreview({ post }: { post: CalendarPost }) {
     );
 }
 
-function PlatformPostPreview({ post }: { post: CalendarPost }) {
+export function PlatformPostPreview({ post }: { post: CalendarPost }) {
     const provider = post.provider.toLowerCase();
     if (provider === "instagram") return <InstagramPreview post={post} />;
     if (provider === "facebook") return <FacebookPreview post={post} />;
@@ -340,7 +323,7 @@ function isRawPost(value: unknown): value is RawPost {
     return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
-function extractPostDetails(payload: unknown, fallback: CalendarPost): CalendarPost {
+export function extractPostDetails(payload: unknown, fallback: CalendarPost): CalendarPost {
     const root = isRawPost(payload) ? payload : {};
     const data = isRawPost(root.data) ? root.data : undefined;
     const posts = Array.isArray(root.posts) ? root.posts : undefined;
@@ -348,7 +331,7 @@ function extractPostDetails(payload: unknown, fallback: CalendarPost): CalendarP
     return normalizePost({ ...fallback, ...raw });
 }
 
-function DetailSkeleton() {
+export function DetailSkeleton() {
     return (
         <div className="space-y-6 p-6">
             <div className="h-5 w-40 animate-pulse rounded bg-muted" />
@@ -365,11 +348,19 @@ function DetailSkeleton() {
     );
 }
 
+async function fetchCalendarPosts(params: URLSearchParams) {
+    const response = await fetch(backendApiUrl(`posts?${params.toString()}`), {
+        credentials: "include",
+    });
+
+    if (!response.ok) throw new Error("Failed to fetch posts");
+
+    const data = (await response.json()) as PostsResponse;
+    return (data.data?.posts ?? data.posts ?? []).map(normalizePost);
+}
+
 export default function CalendarView() {
     const [currentDate, setCurrentDate] = useState(new Date());
-    const [posts, setPosts] = useState<CalendarPost[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
     const [selectedPost, setSelectedPost] = useState<CalendarPost | null>(null);
     const [isLoadingPostDetails, setIsLoadingPostDetails] = useState(false);
     const [postDetailsError, setPostDetailsError] = useState<string | null>(null);
@@ -378,36 +369,22 @@ export default function CalendarView() {
     const month = currentDate.getMonth();
     const daysInMonth = getDaysInMonth(year, month);
     const firstDayOfMonth = getFirstDayOfMonth(year, month);
-
-    useEffect(() => {
-        async function fetchPosts() {
-            try {
-                setIsLoading(true);
-                setError(null);
-                const params = new URLSearchParams({
-                    ...getMonthRange(currentDate),
-                    page: "1",
-                    limit: "100",
-                });
-                const response = await fetch(`/api/posts?${params.toString()}`, {
-                    credentials: "include",
-                    cache: "no-store",
-                });
-
-                if (!response.ok) throw new Error("Failed to fetch posts");
-
-                const data = (await response.json()) as PostsResponse;
-                setPosts((data.data?.posts ?? data.posts ?? []).map(normalizePost));
-            } catch (err) {
-                console.error("Error fetching posts:", err);
-                setError(err instanceof Error ? err.message : "Failed to load posts");
-            } finally {
-                setIsLoading(false);
-            }
-        }
-
-        fetchPosts();
-    }, [currentDate]);
+    const postsParams = useMemo(
+        () =>
+            new URLSearchParams({
+                ...getMonthRange(currentDate),
+                page: "1",
+                limit: "100",
+            }),
+        [currentDate],
+    );
+    const postsCacheKey = useMemo(() => `${POSTS_CACHE_PREFIX}:month:${postsParams.toString()}`, [postsParams]);
+    const fetchPosts = useCallback(() => fetchCalendarPosts(postsParams), [postsParams]);
+    const {
+        data: posts = [],
+        error,
+        isLoading,
+    } = useCachedResource(postsCacheKey, fetchPosts, { ttl: CACHE_TTL });
 
     const calendarDays = useMemo(() => {
         const days: (number | null)[] = [];
@@ -429,7 +406,7 @@ export default function CalendarView() {
         setPostDetailsError(null);
 
         try {
-            const response = await fetch(`/api/posts/${post.id}`, {
+            const response = await fetch(backendApiUrl(`posts/${post.id}`), {
                 credentials: "include",
                 cache: "no-store",
             });
@@ -494,7 +471,7 @@ export default function CalendarView() {
 
             {error && (
                 <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-200">
-                    {error}
+                    {error.message}
                 </div>
             )}
 
@@ -554,7 +531,7 @@ export default function CalendarView() {
                                                     >
                                                         <div className="flex min-w-0 items-center gap-1.5">
                                                             <Image
-                                                                src={getProviderLogo(post.provider)}
+                                                                src={getPlatformLogo(post.provider)}
                                                                 alt={post.provider}
                                                                 width={16}
                                                                 height={16}
@@ -586,7 +563,7 @@ export default function CalendarView() {
                         <div className="z-10 flex shrink-0 items-center justify-between border-b border-border bg-card p-4 shadow-sm">
                             <div className="flex min-w-0 items-center gap-3">
                                 <Image
-                                    src={getProviderLogo(selectedPost.provider)}
+                                    src={getPlatformLogo(selectedPost.provider)}
                                     alt={selectedPost.provider}
                                     width={28}
                                     height={28}

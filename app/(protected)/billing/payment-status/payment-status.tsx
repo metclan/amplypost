@@ -1,170 +1,210 @@
 "use client";
-import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { CheckCircle2, XCircle, AlertCircle, Loader2, LayoutDashboard, ArrowLeft, CreditCard } from "lucide-react";
 
-type StatusType = 'loading' | 'success' | 'failed' | 'pending' | 'abandoned' | 'reversed' | 'ongoing' | 'processing' | 'queued' | 'processed';
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AlertCircle, ArrowRight, CheckCircle2, CreditCard, Loader2, Mail } from "lucide-react";
+import { invalidateCachedResource } from "@/lib/client-cache";
+import { backendApiUrl } from "@/util/backend-api";
+
+type Subscription = {
+    status?: string;
+    hasAccess?: boolean;
+};
+
+type PageState = "loading" | "success" | "pending" | "failed";
+
+const POLL_ATTEMPTS = 10;
+const POLL_INTERVAL_MS = 2_000;
+const FAILED_RETURN_STATUSES = new Set(["failed", "cancelled", "canceled"]);
+
+function wait(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchCurrentSubscription() {
+    const response = await fetch(backendApiUrl("billing/subscriptions/current"), {
+        credentials: "include",
+        cache: "no-store",
+    });
+
+    if (!response.ok) {
+        throw new Error("Unable to confirm your subscription right now.");
+    }
+
+    const json = (await response.json().catch(() => null)) as { data?: Subscription | null } | null;
+    return json?.data ?? null;
+}
+
+async function waitForSubscription(signal: AbortSignal) {
+    for (let attempt = 0; attempt < POLL_ATTEMPTS; attempt += 1) {
+        if (signal.aborted) return null;
+
+        const subscription = await fetchCurrentSubscription();
+        if (subscription?.hasAccess) {
+            return subscription;
+        }
+
+        if (attempt < POLL_ATTEMPTS - 1) {
+            await wait(POLL_INTERVAL_MS);
+        }
+    }
+
+    return null;
+}
 
 export function PaymentStatus() {
-    const searchParams = useSearchParams();
     const router = useRouter();
-    const reference = searchParams.get('reference');
-    const subscriptionId = searchParams.get('subscription_id');
-    const [status, setStatus] = useState<StatusType>('loading');
-    const [message, setMessage] = useState('Verifying your payment...');
+    const searchParams = useSearchParams();
+    const statusParam = searchParams.get("status")?.toLowerCase() ?? "";
+    const subscriptionId = searchParams.get("subscription_id");
+    const email = searchParams.get("email");
+    const abortControllerRef = useRef<AbortController | null>(null);
+    const redirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    useEffect(() => {
-        async function checkPaymentStatus(ref: string) {
-            try {
-                if (reference) {
-                    const response = await fetch(`/api/payments/payment-status/${ref}?payment-processor=paystack`);
-                    const data = await response.json();
+    const [pageState, setPageState] = useState<PageState>("loading");
+    const [isCheckingAgain, setIsCheckingAgain] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-                    if (data.status) {
-                        setStatus(data.status);
-                    } else if (data.success) {
-                        setStatus('success');
-                    } else {
-                        setStatus('failed');
-                    }
+    const confirmSubscription = useCallback(async (isManualRetry = false) => {
+        abortControllerRef.current?.abort();
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
 
-                    if (data.message) {
-                        setMessage(data.message);
-                    }
-                } else if (subscriptionId) {
-                    const response = await fetch(`/api/payments/payment-status/${subscriptionId}?payment-processor=dodo`);
-                    const data = await response.json();
+        setPageState("loading");
+        setErrorMessage(null);
+        setIsCheckingAgain(isManualRetry);
 
-                    if (data.status) {
-                        setStatus(data.status);
-                    } else if (data.success) {
-                        setStatus('success');
-                    } else {
-                        setStatus('failed');
-                    }
+        try {
+            const subscription = await waitForSubscription(controller.signal);
+            if (controller.signal.aborted) return;
 
-                    if (data.message) {
-                        setMessage(data.message);
-                    }
-                }
+            if (subscription?.hasAccess) {
+                invalidateCachedResource("billing:");
+                setPageState("success");
+                redirectTimeoutRef.current = setTimeout(() => {
+                    router.push("/dashboard");
+                }, 1_500);
+                return;
+            }
 
-            } catch (error) {
-                setStatus('failed');
-                setMessage('Failed to verify payment status. Please contact support.');
+            if (FAILED_RETURN_STATUSES.has(statusParam)) {
+                setPageState("failed");
+                return;
+            }
+
+            setPageState("pending");
+        } catch (error) {
+            if (controller.signal.aborted) return;
+
+            setErrorMessage(error instanceof Error ? error.message : "Unable to confirm your subscription right now.");
+            setPageState(FAILED_RETURN_STATUSES.has(statusParam) ? "failed" : "pending");
+        } finally {
+            if (!controller.signal.aborted) {
+                setIsCheckingAgain(false);
             }
         }
+    }, [router, statusParam]);
 
-        if (reference) {
-            checkPaymentStatus(reference);
-        } else if (subscriptionId) {
-            checkPaymentStatus(subscriptionId)
-        } else {
-            setStatus('failed');
-            setMessage('No payment reference found.');
-        }
-    }, [reference]);
+    useEffect(() => {
+        void confirmSubscription();
 
-    const getStatusContent = () => {
-        switch (status) {
-            case 'success':
-                return {
-                    icon: <CheckCircle2 className="h-10 w-10 sm:h-12 sm:w-12 text-green-600" />,
-                    title: 'Payment Successful',
-                    description: 'Your subscription has been successfully updated. You can now enjoy all the features of your new plan.',
-                    bg: 'bg-green-500/10'
-                };
-            case 'processed':
-                return {
-                    icon: <CheckCircle2 className="h-10 w-10 sm:h-12 sm:w-12 text-blue-600" />,
-                    title: 'Payment Already Verified',
-                    description: 'This transaction has already been processed and your subscription is active. No further action is needed.',
-                    bg: 'bg-blue-500/10'
-                };
-            case 'failed':
-                return {
-                    icon: <XCircle className="h-10 w-10 sm:h-12 sm:w-12 text-red-600" />,
-                    title: 'Payment Failed',
-                    description: message !== 'Verification successful' ? message : 'The transaction failed. Please try again.',
-                    bg: 'bg-red-500/10'
-                };
-            case 'abandoned':
-                return {
-                    icon: <AlertCircle className="h-10 w-10 sm:h-12 sm:w-12 text-orange-600" />,
-                    title: 'Payment Abandoned',
-                    description: 'You did not complete the transaction. Please try again if you wish to upgrade.',
-                    bg: 'bg-orange-500/10'
-                };
-            case 'pending':
-            case 'ongoing':
-            case 'processing':
-            case 'queued':
-                return {
-                    icon: <Loader2 className="h-10 w-10 sm:h-12 sm:w-12 text-blue-600 animate-spin" />,
-                    title: 'Payment Processing',
-                    description: 'Your payment is currently being processed. We will notify you once it is completed.',
-                    bg: 'bg-blue-500/10'
-                };
-            case 'reversed':
-                return {
-                    icon: <AlertCircle className="h-10 w-10 sm:h-12 sm:w-12 text-yellow-600" />,
-                    title: 'Payment Reversed',
-                    description: 'The transaction was reversed. If this was a mistake, please contact your bank.',
-                    bg: 'bg-yellow-500/10'
-                };
-            default:
-                return {
-                    icon: <Loader2 className="h-10 w-10 sm:h-12 sm:w-12 text-primary animate-spin" />,
-                    title: 'Verifying Payment',
-                    description: 'Please wait while we verify your payment status...',
-                    bg: 'bg-secondary'
-                };
-        }
-    };
+        return () => {
+            abortControllerRef.current?.abort();
+            if (redirectTimeoutRef.current) {
+                clearTimeout(redirectTimeoutRef.current);
+            }
+        };
+    }, [confirmSubscription]);
 
-    const content = getStatusContent();
+    const content = {
+        loading: {
+            icon: <Loader2 className="h-12 w-12 animate-spin text-primary" />,
+            bg: "bg-primary/10",
+            title: "Confirming your subscription...",
+            description: "We are checking your subscription with the backend before unlocking your account.",
+        },
+        success: {
+            icon: <CheckCircle2 className="h-12 w-12 text-green-600" />,
+            bg: "bg-green-500/10",
+            title: "Your subscription is active",
+            description: "You are all set. Taking you to your dashboard now.",
+        },
+        pending: {
+            icon: <Loader2 className="h-12 w-12 animate-spin text-blue-600" />,
+            bg: "bg-blue-500/10",
+            title: "We’re still confirming your payment. This can take a moment.",
+            description: errorMessage ?? "Payment processors can take a little time to finish syncing the subscription.",
+        },
+        failed: {
+            icon: <AlertCircle className="h-12 w-12 text-red-600" />,
+            bg: "bg-red-500/10",
+            title: "We couldn’t confirm this subscription.",
+            description: errorMessage ?? "The backend has not confirmed access for this subscription.",
+        },
+    }[pageState];
 
     return (
-        <div className="min-h-[80vh] flex items-center justify-center p-4">
-            <div className="max-w-md w-full bg-card border border-border rounded-xl shadow-sm p-6 sm:p-8 text-center">
-                <div className="flex justify-center mb-6">
-                    <div className={`p-4 rounded-full ${content.bg}`}>
+        <div className="flex min-h-[80vh] items-center justify-center p-4">
+            <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 text-center shadow-sm sm:p-8">
+                <div className="mb-6 flex justify-center">
+                    <div className={`rounded-full p-4 ${content.bg}`}>
                         {content.icon}
                     </div>
                 </div>
 
-                <h1 className="text-2xl font-bold text-foreground mb-3">{content.title}</h1>
-                <p className="text-muted-foreground mb-8 text-sm sm:text-base leading-relaxed">
+                <h1 className="mb-3 text-2xl font-bold text-foreground">{content.title}</h1>
+                <p className="mb-6 text-sm leading-relaxed text-muted-foreground sm:text-base">
                     {content.description}
                 </p>
 
-                <div className="space-y-3">
-                    {status === 'success' || status === 'processed' ? (
-                        <>
-                            <button
-                                onClick={() => router.push('/dashboard')}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
-                            >
-                                <LayoutDashboard className="h-4 w-4" />
-                                Go to Dashboard
-                            </button>
-                            <button
-                                onClick={() => router.push('/billing')}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg font-medium transition-colors"
-                            >
-                                <CreditCard className="h-4 w-4" />
-                                View Billing Details
-                            </button>
-                        </>
-                    ) : (
+                {(subscriptionId || email || statusParam) && (
+                    <div className="mb-6 rounded-lg border border-border bg-muted/30 p-3 text-left text-xs text-muted-foreground">
+                        {subscriptionId && <p className="truncate">Subscription: {subscriptionId}</p>}
+                        {email && <p className="truncate">Email: {email}</p>}
+                        {statusParam && <p className="truncate">Return status: {statusParam}</p>}
+                    </div>
+                )}
+
+                {pageState === "pending" && (
+                    <div className="space-y-3">
                         <button
-                            onClick={() => router.push('/billing')}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
+                            type="button"
+                            onClick={() => confirmSubscription(true)}
+                            disabled={isCheckingAgain}
+                            className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                            <ArrowLeft className="h-4 w-4" />
-                            Return to Billing
+                            {isCheckingAgain ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                            Check again
                         </button>
-                    )}
-                </div>
+                        <Link
+                            href="/billing"
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-muted"
+                        >
+                            <CreditCard className="h-4 w-4" />
+                            Go to billing
+                        </Link>
+                    </div>
+                )}
+
+                {pageState === "failed" && (
+                    <div className="space-y-3">
+                        <Link
+                            href="/billing"
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
+                        >
+                            <CreditCard className="h-4 w-4" />
+                            Try again
+                        </Link>
+                        <Link
+                            href="/support"
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-muted"
+                        >
+                            <Mail className="h-4 w-4" />
+                            Contact support
+                        </Link>
+                    </div>
+                )}
             </div>
         </div>
     );

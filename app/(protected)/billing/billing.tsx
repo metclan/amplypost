@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
     AlertCircle,
+    ArrowRight,
     Calendar,
     Check,
     CheckCircle2,
@@ -11,10 +12,12 @@ import {
     ChevronRight,
     Clock,
     CreditCard,
-    ExternalLink,
     Loader2,
     Zap,
 } from "lucide-react";
+import { useCachedResource } from "@/lib/client-cache";
+import { CACHE_TTL } from "@/lib/client-data";
+import { backendApiUrl } from "@/util/backend-api";
 
 interface PlanFeatures {
     platforms?: Record<string, boolean>;
@@ -69,8 +72,12 @@ type ApiResponse<T> = {
 };
 
 type PlansPayload = Plan[] | { plans?: Plan[] };
+type BillingTab = "subscription" | "payments" | "plans";
 
 const currency = "USD";
+const BILLING_CURRENT_CACHE_KEY = "billing:subscriptions:current";
+const BILLING_PLANS_CACHE_KEY = "billing:plans";
+const BILLING_HISTORY_CACHE_PREFIX = "billing:subscriptions:history";
 
 const emptyPagination: PaginationInfo = {
     page: 1,
@@ -171,20 +178,102 @@ async function readApiResponse<T>(response: Response): Promise<ApiResponse<T>> {
     return json as ApiResponse<T>;
 }
 
+class UnauthorizedError extends Error {
+    constructor() {
+        super("Please sign in to continue.");
+        this.name = "UnauthorizedError";
+    }
+}
+
+async function fetchCurrentSubscription() {
+    const response = await fetch(backendApiUrl("billing/subscriptions/current"), {
+        credentials: "include",
+        cache: "no-store",
+    });
+
+    if (response.status === 401) throw new UnauthorizedError();
+
+    const json = await readApiResponse<Subscription | null>(response);
+    return json.data ?? null;
+}
+
+async function fetchBillingPlans() {
+    const response = await fetch(backendApiUrl("billing/plans"), {
+        credentials: "include",
+        cache: "no-store",
+    });
+
+    if (response.status === 401) throw new UnauthorizedError();
+
+    const json = await readApiResponse<PlansPayload>(response);
+    const planData = Array.isArray(json.data) ? json.data : json.data?.plans ?? [];
+    return planData.filter((plan) => plan.isActive !== false);
+}
+
+function getBillingHistoryCacheKey(page: number, limit: number) {
+    return `${BILLING_HISTORY_CACHE_PREFIX}:${page}:${limit}`;
+}
+
+async function fetchSubscriptionHistory(page: number, limit: number) {
+    const response = await fetch(
+        backendApiUrl(`billing/subscriptions/history?page=${page}&limit=${limit}`),
+        {
+            credentials: "include",
+            cache: "no-store",
+        },
+    );
+
+    if (response.status === 401) throw new UnauthorizedError();
+
+    const json = await readApiResponse<{
+        items: Subscription[];
+        pagination: PaginationInfo;
+    }>(response);
+
+    return {
+        items: json.data?.items ?? [],
+        pagination: json.data?.pagination ?? emptyPagination,
+    };
+}
+
 export function Billing() {
     const router = useRouter();
 
-    const [currentSubscription, setCurrentSubscription] = useState<Subscription | null>(null);
-    const [subscriptionHistory, setSubscriptionHistory] = useState<Subscription[]>([]);
-    const [plans, setPlans] = useState<Plan[]>([]);
     const [pagination, setPagination] = useState<PaginationInfo>(emptyPagination);
-    const [isLoadingCurrent, setIsLoadingCurrent] = useState(true);
-    const [isLoadingPlans, setIsLoadingPlans] = useState(true);
-    const [isLoadingHistory, setIsLoadingHistory] = useState(true);
     const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
-    const [isOpeningPortal, setIsOpeningPortal] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [portalError, setPortalError] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<BillingTab>("subscription");
+    const historyCacheKey = getBillingHistoryCacheKey(pagination.page, pagination.limit);
+    const historyInitialData = useMemo(
+        () => ({ items: [], pagination }),
+        [pagination],
+    );
+    const historyFetcher = useCallback(
+        () => fetchSubscriptionHistory(pagination.page, pagination.limit),
+        [pagination.limit, pagination.page],
+    );
+    const {
+        data: currentSubscription = null,
+        error: currentSubscriptionError,
+        isLoading: isLoadingCurrent,
+    } = useCachedResource(BILLING_CURRENT_CACHE_KEY, fetchCurrentSubscription, { ttl: CACHE_TTL });
+    const {
+        data: plans = [],
+        error: plansError,
+        isLoading: isLoadingPlans,
+    } = useCachedResource(BILLING_PLANS_CACHE_KEY, fetchBillingPlans, { ttl: CACHE_TTL });
+    const {
+        data: historyData,
+        error: historyError,
+        isLoading: isLoadingHistory,
+    } = useCachedResource(
+        historyCacheKey,
+        historyFetcher,
+        { ttl: CACHE_TTL, initialData: historyInitialData },
+    );
+    const subscriptionHistory = historyData?.items ?? [];
+    const historyPagination = historyData?.pagination ?? pagination;
+    const loadingError = currentSubscriptionError ?? plansError;
 
     const filteredPlans = useMemo(
         () => plans.filter((plan) => plan.currency.toUpperCase() === currency),
@@ -201,109 +290,14 @@ export function Billing() {
     };
 
     useEffect(() => {
-        let ignore = false;
-
-        async function fetchCurrentSubscription() {
-            try {
-                setIsLoadingCurrent(true);
-                setError(null);
-                const response = await fetch("/api/billing/subscriptions/current", {
-                    credentials: "include",
-                    cache: "no-store",
-                });
-
-                if (handleUnauthorized(response)) return;
-
-                const json = await readApiResponse<Subscription | null>(response);
-                if (!ignore) setCurrentSubscription(json.data ?? null);
-            } catch (fetchError) {
-                if (!ignore) {
-                    setError(fetchError instanceof Error ? fetchError.message : "Failed to load subscription.");
-                }
-            } finally {
-                if (!ignore) setIsLoadingCurrent(false);
-            }
+        if (
+            currentSubscriptionError instanceof UnauthorizedError ||
+            plansError instanceof UnauthorizedError ||
+            historyError instanceof UnauthorizedError
+        ) {
+            router.push("/login");
         }
-
-        fetchCurrentSubscription();
-
-        return () => {
-            ignore = true;
-        };
-    }, [router]);
-
-    useEffect(() => {
-        let ignore = false;
-
-        async function fetchPlans() {
-            try {
-                setIsLoadingPlans(true);
-                const response = await fetch("/api/billing/plans", {
-                    credentials: "include",
-                    cache: "no-store",
-                });
-
-                if (handleUnauthorized(response)) return;
-
-                const json = await readApiResponse<PlansPayload>(response);
-                if (!ignore) {
-                    const planData = Array.isArray(json.data) ? json.data : json.data?.plans ?? [];
-                    setPlans(planData.filter((plan) => plan.isActive !== false));
-                }
-            } catch (fetchError) {
-                if (!ignore) {
-                    setError(fetchError instanceof Error ? fetchError.message : "Failed to load plans.");
-                }
-            } finally {
-                if (!ignore) setIsLoadingPlans(false);
-            }
-        }
-
-        fetchPlans();
-
-        return () => {
-            ignore = true;
-        };
-    }, [router]);
-
-    useEffect(() => {
-        let ignore = false;
-
-        async function fetchSubscriptionHistory() {
-            try {
-                setIsLoadingHistory(true);
-                const response = await fetch(
-                    `/api/billing/subscriptions/history?page=${pagination.page}&limit=${pagination.limit}`,
-                    {
-                        credentials: "include",
-                        cache: "no-store",
-                    },
-                );
-
-                if (handleUnauthorized(response)) return;
-
-                const json = await readApiResponse<{
-                    items: Subscription[];
-                    pagination: PaginationInfo;
-                }>(response);
-
-                if (!ignore) {
-                    setSubscriptionHistory(json.data?.items ?? []);
-                    setPagination(json.data?.pagination ?? emptyPagination);
-                }
-            } catch (fetchError) {
-                console.error("Error fetching subscription history:", fetchError);
-            } finally {
-                if (!ignore) setIsLoadingHistory(false);
-            }
-        }
-
-        fetchSubscriptionHistory();
-
-        return () => {
-            ignore = true;
-        };
-    }, [pagination.page, pagination.limit, router]);
+    }, [currentSubscriptionError, historyError, plansError, router]);
 
     const getStatusBadge = (subscription: Subscription) => {
         const status = subscription.isTrialing ? "trialing" : subscription.status;
@@ -332,7 +326,7 @@ export function Billing() {
         setError(null);
 
         try {
-            const response = await fetch("/api/billing/subscriptions/checkout", {
+            const response = await fetch(backendApiUrl("billing/subscriptions/checkout"), {
                 method: "POST",
                 credentials: "include",
                 headers: { "Content-Type": "application/json" },
@@ -358,45 +352,6 @@ export function Billing() {
         }
     };
 
-    const openCustomerPortal = async () => {
-        setIsOpeningPortal(true);
-        setPortalError(null);
-
-        try {
-            const response = await fetch("/api/billing/customer-portal", {
-                method: "POST",
-                credentials: "include",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    returnUrl: `${window.location.origin}/billing`,
-                    sendEmail: false,
-                }),
-            });
-
-            if (handleUnauthorized(response)) return;
-
-            if (response.status === 404) {
-                setPortalError("Subscribe first to manage billing in the customer portal.");
-                return;
-            }
-
-            const json = await readApiResponse<{ portalUrl: string }>(response);
-            if (!json.data?.portalUrl) {
-                throw new Error("Customer portal URL was not returned. Please try again.");
-            }
-
-            window.location.href = json.data.portalUrl;
-        } catch (portalOpenError) {
-            setPortalError(
-                portalOpenError instanceof Error
-                    ? portalOpenError.message
-                    : "Unable to open the customer portal right now.",
-            );
-        } finally {
-            setIsOpeningPortal(false);
-        }
-    };
-
     const goToPage = (page: number) => {
         setPagination((prev) => ({
             ...prev,
@@ -407,6 +362,18 @@ export function Billing() {
     const subscriptionEndDate = currentSubscription?.isTrialing
         ? currentSubscription.trialEndsAt
         : currentSubscription?.currentPeriodEnd ?? null;
+    const shouldShowPlansImmediately = !currentSubscription || currentSubscription.isTrialing || !currentSubscription.hasAccess;
+    const shouldShowTabs = Boolean(currentSubscription && !currentSubscription.isTrialing && currentSubscription.hasAccess);
+    const shouldShowSubscriptionSection = shouldShowPlansImmediately || activeTab === "subscription";
+    const shouldShowPlansSection = shouldShowPlansImmediately || activeTab === "plans";
+    const shouldShowPaymentsSection = !shouldShowPlansImmediately && activeTab === "payments";
+
+    const switchToPlans = () => {
+        setActiveTab("plans");
+        requestAnimationFrame(() => {
+            document.getElementById("billing-plans")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+    };
 
     return (
         <div className="mx-auto max-w-7xl space-y-8">
@@ -416,41 +383,42 @@ export function Billing() {
                         Billing &amp; Subscription
                     </h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Manage your subscription, checkout, and billing portal.
+                        Manage your subscription, checkout, and payment history.
                     </p>
                 </div>
-
-                {currentSubscription && (
-                    <button
-                        type="button"
-                        onClick={openCustomerPortal}
-                        disabled={isOpeningPortal}
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                        {isOpeningPortal ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                            <ExternalLink className="h-4 w-4" />
-                        )}
-                        Manage billing
-                    </button>
-                )}
             </div>
 
-            {error && (
+            {(error || loadingError) && (
                 <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-600">
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <p>{error}</p>
+                    <p>{error || loadingError?.message}</p>
                 </div>
             )}
 
-            {portalError && (
-                <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-700">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <p>{portalError}</p>
+            {shouldShowTabs && (
+                <div className="inline-flex rounded-xl border border-border bg-card p-1 shadow-sm">
+                    {([
+                        ["subscription", "Subscription"],
+                        ["payments", "Payments"],
+                        ["plans", "Plans"],
+                    ] as const).map(([tab, label]) => (
+                        <button
+                            key={tab}
+                            type="button"
+                            onClick={() => setActiveTab(tab)}
+                            className={`h-10 cursor-pointer rounded-lg px-4 text-sm font-semibold transition ${
+                                activeTab === tab
+                                    ? "bg-primary text-white shadow-sm"
+                                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    ))}
                 </div>
             )}
 
+            {shouldShowSubscriptionSection && (
             <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
                 <div className="flex items-center gap-2 border-b border-border p-5">
                     <CreditCard className="h-5 w-5 text-primary" />
@@ -517,7 +485,26 @@ export function Billing() {
 
                             {["on_hold", "failed", "expired"].includes(currentSubscription.status) && (
                                 <div className="rounded-xl border border-orange-500/20 bg-orange-500/10 p-4 text-sm text-orange-700">
-                                    Your subscription needs attention. Use Manage billing to update payment details or contact support.
+                                    Your subscription needs attention. Review your plans or contact support for help.
+                                </div>
+                            )}
+
+                            {shouldShowTabs && (
+                                <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                        <p className="text-sm font-semibold text-foreground">Looking ahead?</p>
+                                        <p className="mt-1 text-sm text-muted-foreground">
+                                            Review available plans when you are ready to renew or change your subscription.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={switchToPlans}
+                                        className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground hover:bg-muted"
+                                    >
+                                        View plans
+                                        <ArrowRight className="h-4 w-4" />
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -525,18 +512,22 @@ export function Billing() {
                         <div>
                             <p className="font-medium text-foreground">No active subscription</p>
                             <p className="mt-1 text-sm text-muted-foreground">
-                                Choose a plan below to start scheduling and publishing content.
+                                Choose a plan below to start your free trial and begin scheduling content.
                             </p>
                         </div>
                     )}
                 </div>
             </section>
+            )}
 
-            <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            {shouldShowPlansSection && (
+            <section id="billing-plans" className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
                 <div className="border-b border-border p-5">
-                    <h2 className="text-lg font-semibold text-foreground">Available Plans</h2>
+                    <h2 className="text-lg font-semibold text-foreground">
+                        {shouldShowPlansImmediately ? "Choose a plan" : "Plans"}
+                    </h2>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Checkout is hosted by Dodo Payments. Use a plan ID internally; product IDs stay on the backend.
+                        Start with a free trial. Your card will not be charged during the trial period.
                     </p>
                 </div>
 
@@ -560,7 +551,7 @@ export function Billing() {
                                 return (
                                     <article
                                         key={plan.id}
-                                        className={`relative flex flex-col rounded-xl border p-5 shadow-sm transition hover:shadow-md ${
+                                        className={`relative flex min-h-[560px] flex-col rounded-xl border p-5 shadow-sm transition hover:shadow-md ${
                                             isPopular ? "border-primary/50 bg-primary/5" : "border-border bg-card"
                                         }`}
                                     >
@@ -599,24 +590,35 @@ export function Billing() {
                                             </ul>
                                         )}
 
-                                        {plan.trialPeriodDays && plan.trialPeriodDays > 0 && (
-                                            <p className="mt-4 text-xs text-muted-foreground">
-                                                Includes {plan.trialPeriodDays}-day free trial
-                                            </p>
-                                        )}
+                                        <div className="mt-auto pt-6">
+                                            <button
+                                                type="button"
+                                                onClick={() => startCheckout(plan)}
+                                                disabled={subscribingPlanId === plan.id}
+                                                className={`inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-lg text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                                                    isPopular
+                                                        ? "bg-primary text-white hover:bg-primary/90"
+                                                        : "border border-border bg-background text-foreground hover:bg-muted"
+                                                }`}
+                                            >
+                                                {subscribingPlanId === plan.id ? (
+                                                    "Redirecting..."
+                                                ) : (
+                                                    <>
+                                                        {plan.trialPeriodDays && plan.trialPeriodDays > 0
+                                                            ? `Start ${plan.trialPeriodDays}-day free trial`
+                                                            : "Choose plan"}
+                                                        <ArrowRight className="h-4 w-4" />
+                                                    </>
+                                                )}
+                                            </button>
 
-                                        <button
-                                            type="button"
-                                            onClick={() => startCheckout(plan)}
-                                            disabled={subscribingPlanId === plan.id}
-                                            className={`mt-6 inline-flex h-10 w-full items-center justify-center rounded-lg text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                                                isPopular
-                                                    ? "bg-primary text-white hover:bg-primary/90"
-                                                    : "border border-border bg-background text-foreground hover:bg-muted"
-                                            }`}
-                                        >
-                                            {subscribingPlanId === plan.id ? "Redirecting..." : "Choose plan"}
-                                        </button>
+                                            {plan.trialPeriodDays && plan.trialPeriodDays > 0 && (
+                                                <p className="mt-3 text-center text-xs font-medium text-muted-foreground">
+                                                    $0.00 due today. Your card will not be charged during trial.
+                                                </p>
+                                            )}
+                                        </div>
                                     </article>
                                 );
                             })}
@@ -624,10 +626,12 @@ export function Billing() {
                     )}
                 </div>
             </section>
+            )}
 
+            {shouldShowPaymentsSection && (
             <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
                 <div className="border-b border-border p-5">
-                    <h2 className="text-lg font-semibold text-foreground">Subscription History</h2>
+                    <h2 className="text-lg font-semibold text-foreground">Payments</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
                         Previous and current subscription records.
                     </p>
@@ -685,16 +689,16 @@ export function Billing() {
                             </table>
                         </div>
 
-                        {pagination.totalPages > 1 && (
+                        {historyPagination.totalPages > 1 && (
                             <div className="flex flex-col gap-3 border-t border-border bg-muted/30 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                                 <p className="text-sm text-muted-foreground">
-                                    Page {pagination.page} of {pagination.totalPages}
+                                    Page {historyPagination.page} of {historyPagination.totalPages}
                                 </p>
                                 <div className="flex gap-2">
                                     <button
                                         type="button"
-                                        onClick={() => goToPage(pagination.page - 1)}
-                                        disabled={pagination.page === 1}
+                                        onClick={() => goToPage(historyPagination.page - 1)}
+                                        disabled={historyPagination.page === 1}
                                         className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                                         aria-label="Previous page"
                                     >
@@ -702,8 +706,8 @@ export function Billing() {
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => goToPage(pagination.page + 1)}
-                                        disabled={pagination.page === pagination.totalPages}
+                                        onClick={() => goToPage(historyPagination.page + 1)}
+                                        disabled={historyPagination.page === historyPagination.totalPages}
                                         className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                                         aria-label="Next page"
                                     >
@@ -715,6 +719,7 @@ export function Billing() {
                     </>
                 )}
             </section>
+            )}
         </div>
     );
 }
