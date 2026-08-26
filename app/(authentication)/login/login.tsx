@@ -1,20 +1,96 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { backendAuthUrl } from "@/util/backend-api";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+
+type AuthMode = "password" | "otp";
+type AuthMethod = AuthMode | "google";
+const LAST_AUTH_METHOD_KEY = "amplypost:last-auth-method";
 
 export default function LoginForm() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [otp, setOtp] = useState("");
+    const [authMode, setAuthMode] = useState<AuthMode>("otp");
+    const [lastAuthMode, setLastAuthMode] = useState<AuthMethod | null>(null);
+    const [otpSent, setOtpSent] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
+
+    useEffect(() => {
+        const lastAuthMethod = window.localStorage.getItem(LAST_AUTH_METHOD_KEY);
+
+        if (lastAuthMethod === "password" || lastAuthMethod === "otp" || lastAuthMethod === "google") {
+            setLastAuthMode(lastAuthMethod);
+        }
+    }, []);
+
+    const selectAuthMode = (mode: AuthMode) => {
+        setAuthMode(mode);
+        setErrorMessage("");
+        setSuccessMessage("");
+    };
+
+    const saveLastAuthMode = (mode: AuthMethod) => {
+        setLastAuthMode(mode);
+        window.localStorage.setItem(LAST_AUTH_METHOD_KEY, mode);
+    };
+
+    const handleGoogleLogin = async () => {
+        setIsGoogleLoading(true);
+        setErrorMessage("");
+        setSuccessMessage("");
+
+        try {
+            const response = await fetch(backendAuthUrl("auth/sign-in/social"), {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    provider: "google",
+                    callbackURL: `${window.location.origin}/dashboard`,
+                }),
+            });
+
+            const data = await response.json().catch(() => null);
+
+            if (!response.ok) {
+                throw new Error(data?.message ?? "Unable to continue with Google.");
+            }
+
+            saveLastAuthMode("google");
+
+            if (typeof data?.url === "string") {
+                window.location.assign(data.url);
+                return;
+            }
+
+            if (response.redirected) {
+                window.location.assign(response.url);
+                return;
+            }
+
+            window.location.assign("/dashboard");
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : "Unable to continue with Google. Please try again.",
+            );
+            setIsGoogleLoading(false);
+        }
+    };
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
         setErrorMessage("");
+        setSuccessMessage("");
 
         try {
             const response = await fetch(backendAuthUrl("auth/sign-in/email"), {
@@ -35,6 +111,7 @@ export default function LoginForm() {
                 throw new Error(data?.message ?? "Invalid email or password.");
             }
 
+            saveLastAuthMode("password");
             window.location.assign("/dashboard");
         } catch (error) {
             setErrorMessage(
@@ -47,11 +124,82 @@ export default function LoginForm() {
         }
     };
 
+    const handleSendOtp = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+        setErrorMessage("");
+        setSuccessMessage("");
+
+        try {
+            const response = await fetch(backendAuthUrl("auth/email-otp/send-verification-otp"), {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email,
+                    type: "sign-in",
+                }),
+            });
+
+            if (!response.ok) {
+                const data = await response.json().catch(() => null);
+                throw new Error(data?.message ?? "Unable to send verification code.");
+            }
+
+            setOtpSent(true);
+            setOtp("");
+            setSuccessMessage("Verification code sent. Check your email.");
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : "Unable to send verification code. Please try again.",
+            );
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleOtpLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+        setErrorMessage("");
+        setSuccessMessage("");
+
+        try {
+            const response = await fetch(backendAuthUrl("auth/sign-in/email-otp"), {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email,
+                    otp,
+                }),
+            });
+
+            if (!response.ok) {
+                const data = await response.json().catch(() => null);
+                throw new Error(data?.message ?? "Invalid or expired verification code.");
+            }
+
+            saveLastAuthMode("otp");
+            window.location.assign("/dashboard");
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : "Unable to sign in with the verification code.",
+            );
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return (
         <div className="flex min-h-screen items-center justify-center bg-background px-4">
             <div className="w-full max-w-md">
                 <div className="mb-8 text-center">
-                    <Link href="/" className="inline-flex items-center gap-2">
+                    <Link href="/" className="inline-flex cursor-pointer items-center gap-2">
                         <Image
                             src="/amplypost-logo.png"
                             alt="Amplypost Logo"
@@ -70,8 +218,9 @@ export default function LoginForm() {
                 <div className="rounded-2xl border border-border bg-card p-8 shadow-lg">
                     <button
                         type="button"
-                        disabled
-                        className="flex w-full cursor-not-allowed items-center justify-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-muted-foreground opacity-75"
+                        onClick={handleGoogleLogin}
+                        disabled={isGoogleLoading || isLoading}
+                        className="flex w-full cursor-pointer items-center justify-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         <svg className="h-5 w-5" viewBox="0 0 24 24">
                             <path
@@ -91,10 +240,12 @@ export default function LoginForm() {
                                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                             />
                         </svg>
-                        <span>Continue with Google</span>
-                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                            Coming soon
-                        </span>
+                        <span>{isGoogleLoading ? "Connecting..." : "Continue with Google"}</span>
+                        {lastAuthMode === "google" && (
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                                Last used
+                            </span>
+                        )}
                     </button>
 
                     {/* Divider */}
@@ -104,13 +255,57 @@ export default function LoginForm() {
                         <div className="h-px flex-1 bg-border"></div>
                     </div>
 
-                    <form onSubmit={handleLogin} className="space-y-4">
-                        {errorMessage && (
-                            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                                {errorMessage}
-                            </div>
-                        )}
+                    {errorMessage && (
+                        <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                            {errorMessage}
+                        </div>
+                    )}
 
+                    {successMessage && (
+                        <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+                            {successMessage}
+                        </div>
+                    )}
+
+                    <div className="mb-4 grid grid-cols-2 rounded-lg border border-border bg-muted p-1">
+                        <button
+                            type="button"
+                            onClick={() => selectAuthMode("otp")}
+                            className={`relative cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                                authMode === "otp"
+                                    ? "bg-background text-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground"
+                            }`}
+                        >
+                            OTP Login
+                            {lastAuthMode === "otp" && (
+                                <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                                    Last used
+                                </span>
+                            )}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => selectAuthMode("password")}
+                            className={`relative cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                                authMode === "password"
+                                    ? "bg-background text-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground"
+                            }`}
+                        >
+                            Password
+                            {lastAuthMode === "password" && (
+                                <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                                    Last used
+                                </span>
+                            )}
+                        </button>
+                    </div>
+
+                    <form
+                        onSubmit={authMode === "password" ? handleLogin : otpSent ? handleOtpLogin : handleSendOtp}
+                        className="space-y-4"
+                    >
                         <div>
                             <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
                                 Email address
@@ -126,36 +321,79 @@ export default function LoginForm() {
                             />
                         </div>
 
-                        <div>
-                            <label htmlFor="password" className="block text-sm font-medium text-foreground mb-2">
-                                Password
-                            </label>
-                            <input
-                                id="password"
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="Enter your password"
-                                required
-                                minLength={8}
-                                autoComplete="current-password"
-                                className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                            />
-                        </div>
+                        {authMode === "password" ? (
+                            <div>
+                                <label htmlFor="password" className="block text-sm font-medium text-foreground mb-2">
+                                    Password
+                                </label>
+                                <input
+                                    id="password"
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="Enter your password"
+                                    required
+                                    minLength={8}
+                                    autoComplete="current-password"
+                                    className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                            </div>
+                        ) : (
+                            otpSent && (
+                                <div>
+                                    <label htmlFor="otp" className="block text-sm font-medium text-foreground mb-2">
+                                        Verification code
+                                    </label>
+                                    <InputOTP
+                                        id="otp"
+                                        maxLength={6}
+                                        value={otp}
+                                        onChange={setOtp}
+                                        disabled={isLoading}
+                                        containerClassName="justify-center"
+                                    >
+                                        <InputOTPGroup>
+                                            {Array.from({ length: 6 }).map((_, index) => (
+                                                <InputOTPSlot key={index} index={index} />
+                                            ))}
+                                        </InputOTPGroup>
+                                    </InputOTP>
+                                </div>
+                            )
+                        )}
 
                         <button
                             type="submit"
-                            disabled={isLoading}
-                            className="w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-primary/90 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={isLoading || (authMode === "otp" && otpSent && otp.length < 6)}
+                            className="w-full cursor-pointer rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-primary/90 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            {isLoading ? "Signing in..." : "Sign in"}
+                            {isLoading
+                                ? authMode === "otp" && !otpSent
+                                    ? "Sending code..."
+                                    : "Signing in..."
+                                : authMode === "password"
+                                    ? "Sign in"
+                                    : otpSent
+                                        ? "Verify code"
+                                        : "Send verification code"}
                         </button>
+
+                        {authMode === "otp" && otpSent && (
+                            <button
+                                type="button"
+                                onClick={handleSendOtp}
+                                disabled={isLoading}
+                                className="w-full cursor-pointer text-sm font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                Resend code
+                            </button>
+                        )}
                     </form>
 
                     {/* Sign Up Link */}
                     <p className="mt-6 text-center text-sm text-muted-foreground">
                         Don&apos;t have an account?{" "}
-                        <Link href="/create-account" className="font-medium text-primary hover:underline">
+                        <Link href="/create-account" className="cursor-pointer font-medium text-primary hover:underline">
                             Sign up
                         </Link>
                     </p>
@@ -163,7 +401,7 @@ export default function LoginForm() {
 
                 {/* Back to Home */}
                 <div className="mt-6 text-center">
-                    <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
+                    <Link href="/" className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
                         ← Back to home
                     </Link>
                 </div>

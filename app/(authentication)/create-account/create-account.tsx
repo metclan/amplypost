@@ -6,10 +6,54 @@ import Image from "next/image";
 import { backendAuthUrl } from "@/util/backend-api";
 
 export default function CreateAccountForm() {
+    const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
+
+    const handleGoogleSignup = async () => {
+        setIsGoogleLoading(true);
+        setErrorMessage("");
+
+        try {
+            const response = await fetch(backendAuthUrl("auth/sign-in/social"), {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    provider: "google",
+                    callbackURL: `${window.location.origin}/dashboard`,
+                }),
+            });
+
+            const data = await response.json().catch(() => null);
+
+            if (!response.ok) {
+                throw new Error(data?.message ?? "Unable to continue with Google.");
+            }
+
+            if (typeof data?.url === "string") {
+                window.location.assign(data.url);
+                return;
+            }
+
+            if (response.redirected) {
+                window.location.assign(response.url);
+                return;
+            }
+
+            window.location.assign("/dashboard");
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : "Unable to continue with Google. Please try again.",
+            );
+            setIsGoogleLoading(false);
+        }
+    };
 
     const handleSignup = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -24,7 +68,7 @@ export default function CreateAccountForm() {
                 },
                 credentials: "include",
                 body: JSON.stringify({
-                    name: email.split("@")[0],
+                    name,
                     email,
                     password,
                     rememberMe: true,
@@ -52,7 +96,7 @@ export default function CreateAccountForm() {
         <div className="flex min-h-screen items-center justify-center bg-background px-4">
             <div className="w-full max-w-md">
                 <div className="mb-8 text-center">
-                    <Link href="/" className="inline-flex items-center gap-2">
+                    <Link href="/" className="inline-flex cursor-pointer items-center gap-2">
                         <Image
                             src="/amplypost-logo.png"
                             alt="Amplypost Logo"
@@ -71,8 +115,9 @@ export default function CreateAccountForm() {
                 <div className="rounded-2xl border border-border bg-card p-8 shadow-lg">
                     <button
                         type="button"
-                        disabled
-                        className="flex w-full cursor-not-allowed items-center justify-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-muted-foreground opacity-75"
+                        onClick={handleGoogleSignup}
+                        disabled={isGoogleLoading || isLoading}
+                        className="flex w-full cursor-pointer items-center justify-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         <svg className="h-5 w-5" viewBox="0 0 24 24">
                             <path
@@ -92,10 +137,7 @@ export default function CreateAccountForm() {
                                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                             />
                         </svg>
-                        <span>Continue with Google</span>
-                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                            Coming soon
-                        </span>
+                        <span>{isGoogleLoading ? "Connecting..." : "Continue with Google"}</span>
                     </button>
 
                     {/* Divider */}
@@ -111,6 +153,22 @@ export default function CreateAccountForm() {
                                 {errorMessage}
                             </div>
                         )}
+
+                        <div>
+                            <label htmlFor="name" className="block text-sm font-medium text-foreground mb-2">
+                                Name
+                            </label>
+                            <input
+                                id="name"
+                                type="text"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder="Your name"
+                                required
+                                autoComplete="name"
+                                className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                        </div>
 
                         <div>
                             <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
@@ -147,7 +205,7 @@ export default function CreateAccountForm() {
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className="w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-primary/90 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full cursor-pointer rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-primary/90 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {isLoading ? "Creating account..." : "Create account"}
                         </button>
@@ -156,11 +214,11 @@ export default function CreateAccountForm() {
                     {/* Terms */}
                     <p className="mt-4 text-center text-xs text-muted-foreground">
                         By continuing, you agree to our{" "}
-                        <Link href="/tos" className="text-primary hover:underline">
+                        <Link href="/tos" className="cursor-pointer text-primary hover:underline">
                             Terms of Service
                         </Link>{" "}
                         and{" "}
-                        <Link href="/privacy" className="text-primary hover:underline">
+                        <Link href="/privacy" className="cursor-pointer text-primary hover:underline">
                             Privacy Policy
                         </Link>
                     </p>
@@ -168,7 +226,7 @@ export default function CreateAccountForm() {
                     {/* Sign In Link */}
                     <p className="mt-6 text-center text-sm text-muted-foreground">
                         Already have an account?{" "}
-                        <Link href="/login" className="font-medium text-primary hover:underline">
+                        <Link href="/login" className="cursor-pointer font-medium text-primary hover:underline">
                             Sign in
                         </Link>
                     </p>
@@ -176,7 +234,7 @@ export default function CreateAccountForm() {
 
                 {/* Back to Home */}
                 <div className="mt-6 text-center">
-                    <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
+                    <Link href="/" className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
                         ← Back to home
                     </Link>
                 </div>
