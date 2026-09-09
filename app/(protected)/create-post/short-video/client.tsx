@@ -28,7 +28,8 @@ import { fetchConnectedAccounts, type ConnectedAccount } from "../accounts";
 import { SubscriptionRequiredError, parseApiErrorResponse } from "@/lib/client-errors";
 import { useWorkspace } from "@/app/components/workspace-provider";
 import { accountBelongsToWorkspace } from "@/lib/workspaces";
-import { backendApiUrl } from "@/util/backend-api";
+import { apiFetch } from "@/util/backend-api";
+import { ACCEPTED_IMAGE_INPUT_TYPES, getMediaContentType, isAcceptedImageFile } from "@/util/media-files";
 
 type MediaKind = "image" | "video";
 type StoryPublishMode = "feed" | "feed_and_story" | "story_only";
@@ -62,6 +63,7 @@ interface MediaFileItem {
 interface MediaPreviewItem {
     id: number;
     url: string;
+    name: string;
     type: MediaKind;
 }
 
@@ -649,12 +651,13 @@ export default function ShortVideoClient() {
 
         try {
             const fileName = renameFileWithTimestamp(media.file);
-            const response = await fetch(backendApiUrl("uploads"), {
+            const contentType = getMediaContentType(media.file);
+            const response = await fetch("/api/uploads", {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ filename: fileName, contentType: media.file.type }),
+                body: JSON.stringify({ filename: fileName, contentType }),
                 signal: abortController.signal,
             });
 
@@ -696,7 +699,7 @@ export default function ShortVideoClient() {
                 });
 
                 xhr.open('PUT', uploadUrl);
-                xhr.setRequestHeader('Content-Type', media.file.type);
+                xhr.setRequestHeader('Content-Type', contentType);
 
                 abortController.signal.addEventListener('abort', () => {
                     xhr.abort();
@@ -747,14 +750,13 @@ export default function ShortVideoClient() {
     const handleFileChange = async (files: FileList | null) => {
         if (!files || files.length === 0) return;
 
-        const validImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
         const validVideoTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
         const maxSize = 500 * 1024 * 1024; // 500MB
         const newMediaFiles: MediaFileItem[] = [];
         const newMediaPreviews: MediaPreviewItem[] = [];
 
         const fileItems = await Promise.all(Array.from(files).map(async (file) => {
-            const isImage = validImageTypes.includes(file.type);
+            const isImage = isAcceptedImageFile(file);
             const isVideo = validVideoTypes.includes(file.type);
 
             if (!isImage && !isVideo) {
@@ -778,7 +780,7 @@ export default function ShortVideoClient() {
             if (!item) return;
 
             newMediaFiles.push(item);
-            newMediaPreviews.push({ id: item.id, url: URL.createObjectURL(item.file), type: item.type });
+            newMediaPreviews.push({ id: item.id, url: URL.createObjectURL(item.file), name: item.file.name, type: item.type });
         });
 
         if (newMediaFiles.length === 0) {
@@ -877,7 +879,7 @@ export default function ShortVideoClient() {
             const uploaded = uploadedMedia.get(mediaPendingRemoval.id);
 
             if (uploaded) {
-                const response = await fetch(backendApiUrl("uploads"), {
+                const response = await fetch("/api/uploads", {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1130,7 +1132,7 @@ export default function ShortVideoClient() {
                 scheduledTimezone: scheduledTimezoneValue,
             };
 
-            const response = await fetch(backendApiUrl("posts"), {
+            const response = await apiFetch("posts", {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1203,7 +1205,7 @@ export default function ShortVideoClient() {
                     <input
                         ref={fileInputRef}
                         type="file"
-                        accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/quicktime,video/x-msvideo,video/webm"
+                        accept={`${ACCEPTED_IMAGE_INPUT_TYPES},video/mp4,video/quicktime,video/x-msvideo,video/webm`}
                         onChange={handleInputChange}
                         multiple
                         className="hidden"
@@ -1234,7 +1236,7 @@ export default function ShortVideoClient() {
                         >
                             Upload Media
                         </Button>
-                        <p className="mt-4 text-xs text-muted-foreground">JPEG, PNG, GIF, WebP, MP4, MOV, AVI or WebM • Max 500MB each</p>
+                        <p className="mt-4 text-xs text-muted-foreground">JPEG, PNG, GIF, WebP, HEIC, HEIF, MP4, MOV, AVI or WebM • Max 500MB each</p>
                     </div>
 
                     {mediaPreviews.length > 0 && (
@@ -1259,7 +1261,17 @@ export default function ShortVideoClient() {
                                     return (
                                         <div key={preview.id} className="relative aspect-square overflow-hidden rounded-lg border border-border bg-muted">
                                             {preview.type === 'image' ? (
-                                                <img src={preview.url} alt="" className="h-full w-full object-cover" />
+                                                <div className="relative flex h-full w-full items-center justify-center bg-muted px-3 text-center text-xs text-muted-foreground">
+                                                    <span className="line-clamp-2 break-all">{preview.name}</span>
+                                                    <img
+                                                        src={preview.url}
+                                                        alt=""
+                                                        className="absolute inset-0 h-full w-full object-cover"
+                                                        onError={(event) => {
+                                                            event.currentTarget.style.display = "none";
+                                                        }}
+                                                    />
+                                                </div>
                                             ) : (
                                                 <video src={preview.url} controls className="h-full w-full object-contain">
                                                     Your browser does not support the video tag.

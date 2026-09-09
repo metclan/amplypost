@@ -22,7 +22,7 @@ import {
     getStatusClasses,
     type CalendarPost,
 } from "@/app/(protected)/dashboard/calendar-view";
-import { backendApiUrl } from "@/util/backend-api";
+import { apiFetch } from "@/util/backend-api";
 
 type PostStatus = "published" | "failed" | "scheduled" | "pending" | "processing" | "publishing" | string;
 
@@ -210,9 +210,7 @@ function buildPostsParams(fromDate: string, toDate: string, platform: string) {
 }
 
 async function fetchPosts(params: URLSearchParams) {
-    const response = await fetch(backendApiUrl(`posts?${params.toString()}`), {
-        credentials: "include",
-    });
+    const response = await apiFetch(`posts?${params.toString()}`);
 
     if (!response.ok) {
         throw new Error("Failed to fetch posts.");
@@ -240,9 +238,7 @@ function buildPostGroupsParams(fromDate: string, toDate: string, platform: strin
 }
 
 async function fetchPostGroups(params: URLSearchParams): Promise<PostGroupsResult> {
-    const response = await fetch(backendApiUrl(`post-groups?${params.toString()}`), {
-        credentials: "include",
-    });
+    const response = await apiFetch(`post-groups?${params.toString()}`);
 
     if (!response.ok) {
         throw new Error("Failed to fetch post groups.");
@@ -264,9 +260,7 @@ async function fetchPostGroups(params: URLSearchParams): Promise<PostGroupsResul
 }
 
 async function fetchPostGroupPosts(groupId: string) {
-    const response = await fetch(backendApiUrl(`post-groups/${groupId}/posts`), {
-        credentials: "include",
-    });
+    const response = await apiFetch(`post-groups/${groupId}/posts`);
 
     if (!response.ok) {
         throw new Error("Failed to fetch post group posts.");
@@ -589,8 +583,7 @@ export default function PostsClient() {
         setPostDetailsError(null);
 
         try {
-            const response = await fetch(backendApiUrl(`posts/${post.id}`), {
-                credentials: "include",
+            const response = await apiFetch(`posts/${post.id}`, {
                 cache: "no-store",
             });
             if (!response.ok) throw new Error("Failed to fetch post details");

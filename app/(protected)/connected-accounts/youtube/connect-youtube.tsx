@@ -9,7 +9,7 @@ import { CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { invalidateAccountData } from "@/lib/client-data";
-import { config } from "@/util/config";
+import { apiFetch } from "@/util/backend-api";
 
 type ConnectionState = "loading" | "success" | "error";
 
@@ -19,8 +19,6 @@ type StatusPanelProps = {
     message: string;
     details?: string;
 };
-
-const youtubeConnectUrl = `${config.backendUrl}accounts/youtube/connect`;
 
 function PageHeader() {
     return (
@@ -114,12 +112,11 @@ export default function YouTubeCallback() {
             }
 
             try {
-                const response = await fetch(youtubeConnectUrl, {
+                const response = await apiFetch("accounts/youtube/connect", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
                     },
-                    credentials: "include",
                     body: JSON.stringify({ code }),
                 });
 

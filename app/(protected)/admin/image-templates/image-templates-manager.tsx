@@ -14,7 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import DeleteConfirmationModal from "@/app/components/delete-confirmation-modal";
-import { backendApiUrl } from "@/util/backend-api";
+import { apiFetch } from "@/util/backend-api";
+import { ACCEPTED_IMAGE_INPUT_TYPES, getMediaContentType } from "@/util/media-files";
 
 type TemplateCategory = {
   id: string;
@@ -104,7 +105,7 @@ export default function ImageTemplatesManager() {
   async function fetchCategories() {
     try {
       setLoadingCategories(true);
-      const response = await fetch(backendApiUrl("admin/template-categories"), { cache: "no-store" });
+      const response = await apiFetch("admin/template-categories", { cache: "no-store" });
       const data = await response.json();
 
       if (!response.ok) {
@@ -132,7 +133,7 @@ export default function ImageTemplatesManager() {
         params.set("categoryId", targetCategoryId);
       }
 
-      const response = await fetch(backendApiUrl(`admin/image-templates?${params.toString()}`), {
+      const response = await apiFetch(`admin/image-templates?${params.toString()}`, {
         cache: "no-store",
       });
       const data = await response.json();
@@ -241,12 +242,13 @@ export default function ImageTemplatesManager() {
   }
 
   async function uploadTemplateImage(file: File) {
-    const signedResponse = await fetch(backendApiUrl("uploads"), {
+    const contentType = getMediaContentType(file);
+    const signedResponse = await fetch("/api/uploads", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ filename: file.name, contentType: file.type }),
+      body: JSON.stringify({ filename: file.name, contentType }),
     });
 
     const signedData = await signedResponse.json();
@@ -258,7 +260,7 @@ export default function ImageTemplatesManager() {
     const uploadResponse = await fetch(signedData.uploadUrl, {
       method: "PUT",
       headers: {
-        "Content-Type": file.type,
+        "Content-Type": contentType,
       },
       body: file,
     });
@@ -271,7 +273,7 @@ export default function ImageTemplatesManager() {
   }
 
   async function createCategory(name: string) {
-    const response = await fetch(backendApiUrl("admin/template-categories"), {
+    const response = await apiFetch("admin/template-categories", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -330,7 +332,7 @@ export default function ImageTemplatesManager() {
       }
 
       if (editingTemplate) {
-        const response = await fetch(backendApiUrl(`admin/image-templates/${editingTemplate.id}`), {
+        const response = await apiFetch(`admin/image-templates/${editingTemplate.id}`, {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
@@ -349,7 +351,7 @@ export default function ImageTemplatesManager() {
 
         toast.success("Image template updated");
       } else {
-        const response = await fetch(backendApiUrl("admin/image-templates"), {
+        const response = await apiFetch("admin/image-templates", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -391,7 +393,7 @@ export default function ImageTemplatesManager() {
       }
 
       if (editingCategory) {
-        const response = await fetch(backendApiUrl(`admin/template-categories/${editingCategory.id}`), {
+        const response = await apiFetch(`admin/template-categories/${editingCategory.id}`, {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
@@ -431,7 +433,7 @@ export default function ImageTemplatesManager() {
       let nextFilter = selectedCategoryFilter;
 
       if (confirmation.type === "template") {
-        const response = await fetch(backendApiUrl(`admin/image-templates/${confirmation.id}`), {
+        const response = await apiFetch(`admin/image-templates/${confirmation.id}`, {
           method: "DELETE",
         });
         const data = await response.json();
@@ -447,7 +449,7 @@ export default function ImageTemplatesManager() {
 
         toast.success("Image template deleted");
       } else {
-        const response = await fetch(backendApiUrl(`admin/template-categories/${confirmation.id}`), {
+        const response = await apiFetch(`admin/template-categories/${confirmation.id}`, {
           method: "DELETE",
         });
         const data = await response.json();
@@ -731,7 +733,7 @@ export default function ImageTemplatesManager() {
                 <label className="mb-1 block text-xs text-white/70">Template Image</label>
                 <Input
                   type="file"
-                  accept="image/*"
+                  accept={`image/*,${ACCEPTED_IMAGE_INPUT_TYPES}`}
                   onChange={onTemplateFileChange}
                   className="border-white/20 bg-black/20 text-white"
                 />

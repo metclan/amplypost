@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useCachedResource } from "@/lib/client-cache";
 import { CACHE_TTL } from "@/lib/client-data";
-import { backendApiUrl } from "@/util/backend-api";
+import { apiFetch } from "@/util/backend-api";
 
 interface PlanFeatures {
     platforms?: Record<string, boolean>;
@@ -186,8 +186,7 @@ class UnauthorizedError extends Error {
 }
 
 async function fetchCurrentSubscription() {
-    const response = await fetch(backendApiUrl("billing/subscriptions/current"), {
-        credentials: "include",
+    const response = await apiFetch("billing/subscriptions/current", {
         cache: "no-store",
     });
 
@@ -198,8 +197,7 @@ async function fetchCurrentSubscription() {
 }
 
 async function fetchBillingPlans() {
-    const response = await fetch(backendApiUrl("billing/plans"), {
-        credentials: "include",
+    const response = await apiFetch("billing/plans", {
         cache: "no-store",
     });
 
@@ -215,10 +213,9 @@ function getBillingHistoryCacheKey(page: number, limit: number) {
 }
 
 async function fetchSubscriptionHistory(page: number, limit: number) {
-    const response = await fetch(
-        backendApiUrl(`billing/subscriptions/history?page=${page}&limit=${limit}`),
+    const response = await apiFetch(
+        `billing/subscriptions/history?page=${page}&limit=${limit}`,
         {
-            credentials: "include",
             cache: "no-store",
         },
     );
@@ -326,9 +323,8 @@ export function Billing() {
         setError(null);
 
         try {
-            const response = await fetch(backendApiUrl("billing/subscriptions/checkout"), {
+            const response = await apiFetch("billing/subscriptions/checkout", {
                 method: "POST",
-                credentials: "include",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     planId: plan.id,

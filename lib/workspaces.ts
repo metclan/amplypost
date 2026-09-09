@@ -1,7 +1,7 @@
 "use client";
 
 import { parseApiErrorResponse } from "@/lib/client-errors";
-import { backendApiUrl } from "@/util/backend-api";
+import { apiFetch } from "@/util/backend-api";
 
 export const WORKSPACES_CACHE_KEY = "workspaces";
 export const SELECTED_WORKSPACE_STORAGE_KEY = "amplypost:selected-workspace-id";
@@ -146,9 +146,7 @@ function extractWorkspace(payload: WorkspaceResponse | Workspace | null) {
 }
 
 export async function fetchWorkspaces() {
-    const response = await fetch(backendApiUrl("workspaces"), {
-        credentials: "include",
-    });
+    const response = await apiFetch("workspaces");
 
     if (!response.ok) {
         await parseApiErrorResponse(response, "Failed to fetch workspaces.");
@@ -159,9 +157,7 @@ export async function fetchWorkspaces() {
 }
 
 export async function fetchWorkspace(id: string) {
-    const response = await fetch(backendApiUrl(`workspaces/${id}`), {
-        credentials: "include",
-    });
+    const response = await apiFetch(`workspaces/${id}`);
 
     if (!response.ok) {
         await parseApiErrorResponse(response, "Failed to fetch workspace.");
@@ -172,12 +168,11 @@ export async function fetchWorkspace(id: string) {
 }
 
 export async function createWorkspace(payload: WorkspacePayload) {
-    const response = await fetch(backendApiUrl("workspaces"), {
+    const response = await apiFetch("workspaces", {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
         },
-        credentials: "include",
         body: JSON.stringify(payload),
     });
 
@@ -190,12 +185,11 @@ export async function createWorkspace(payload: WorkspacePayload) {
 }
 
 export async function updateWorkspace(id: string, payload: Partial<WorkspacePayload>) {
-    const response = await fetch(backendApiUrl(`workspaces/${id}`), {
+    const response = await apiFetch(`workspaces/${id}`, {
         method: "PATCH",
         headers: {
             "Content-Type": "application/json",
         },
-        credentials: "include",
         body: JSON.stringify(payload),
     });
 
@@ -208,9 +202,8 @@ export async function updateWorkspace(id: string, payload: Partial<WorkspacePayl
 }
 
 export async function deleteWorkspace(id: string) {
-    const response = await fetch(backendApiUrl(`workspaces/${id}`), {
+    const response = await apiFetch(`workspaces/${id}`, {
         method: "DELETE",
-        credentials: "include",
     });
 
     if (!response.ok) {

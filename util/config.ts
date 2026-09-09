@@ -1,10 +1,10 @@
-const rawBackendUrl =
-    process.env.NEXT_PUBLIC_BACKEND_URL ?? process.env.BACKEND_URL ?? "";
+const API_ORIGIN = (
+    process.env.NEXT_PUBLIC_API_URL?.trim() ||
+    "https://api.amplypost.com"
+).replace(/\/+$/, "");
 
 export const config = {
-    authUrl : rawBackendUrl ? new URL("/api/", rawBackendUrl).toString()
-        : "/api/",
-    backendUrl: rawBackendUrl
-        ? new URL("/api/v1/", rawBackendUrl).toString()
-        : "/api/v1/",
+    apiOrigin: API_ORIGIN,
+    authUrl: `${API_ORIGIN}/api/`,
+    backendUrl: `${API_ORIGIN}/api/v1/`,
 };

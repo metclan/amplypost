@@ -8,7 +8,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { backendApiUrl } from "@/util/backend-api";
+import { apiFetch } from "@/util/backend-api";
 
 export type TikTokPrivacy = 'FOLLOWER_OF_CREATOR' | 'MUTUAL_FOLLOW_FRIENDS' | 'SELF_ONLY';
 
@@ -78,7 +78,7 @@ export default function TikTokPublishConfig({
             if (!accountId) return;
             setIsLoading(true);
             try {
-                const res = await fetch(backendApiUrl(`tiktok/${accountId}`));
+                const res = await apiFetch(`tiktok/${accountId}`);
                 if (res.ok) {
                     const data = await res.json();
                     setFetchedConfig(data);

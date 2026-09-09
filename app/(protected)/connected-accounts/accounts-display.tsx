@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import AccountCard from "./account-card";
 import DeleteConfirmationModal from "@/app/components/delete-confirmation-modal";
-import { backendApiUrl } from "@/util/backend-api";
+import { apiFetch } from "@/util/backend-api";
 
 interface ConnectedAccount {
     id: string;
@@ -62,12 +62,11 @@ export default function AccountsDisplay() {
         async function fetchAccounts() {
             try {
                 setIsLoading(true);
-                // Build URL with provider query param if filter is active
-                const url = selectedFilter === "all"
-                    ? backendApiUrl("connected-accounts")
-                    : backendApiUrl(`connected-accounts?provider=${encodeURIComponent(selectedFilter)}`);
+                const path = selectedFilter === "all"
+                    ? "connected-accounts"
+                    : `connected-accounts?provider=${encodeURIComponent(selectedFilter)}`;
 
-                const response = await fetch(url);
+                const response = await apiFetch(path);
                 if (response.ok) {
                     const data: ConnectedAccount[] = await response.json();
                     setAccounts(data);
@@ -110,7 +109,7 @@ export default function AccountsDisplay() {
 
         try {
             setIsDeleting(true);
-            const response = await fetch(backendApiUrl(`connected-accounts/${accountToDelete}`), {
+            const response = await apiFetch(`connected-accounts/${accountToDelete}`, {
                 method: "DELETE",
             });
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowRight, Check, Zap } from "lucide-react";
-import { backendApiUrl } from "@/util/backend-api";
+import { apiFetch } from "@/util/backend-api";
 
 interface PlanFeatures {
     platforms?: Record<string, boolean>;
@@ -123,8 +123,7 @@ export default function Pricing() {
             try {
                 setIsLoading(true);
                 setError(null);
-                const response = await fetch(backendApiUrl("billing/plans"), {
-                    credentials: "include",
+                const response = await apiFetch("billing/plans", {
                     cache: "no-store",
                 });
 

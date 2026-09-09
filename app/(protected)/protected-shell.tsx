@@ -5,7 +5,14 @@ import { useRouter } from "next/navigation";
 import ProtectedSidebar from "../components/protected-sidebar";
 import { prefetchProtectedData } from "@/lib/client-data";
 import { WorkspaceProvider } from "../components/workspace-provider";
-import { backendAuthUrl } from "@/util/backend-api";
+import { authFetch } from "@/util/backend-api";
+
+type SessionErrorPayload = {
+    code?: string;
+    error?: string;
+    action?: string;
+    email?: string;
+};
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "amplypost:sidebar-collapsed";
 const sidebarCollapseListeners = new Set<() => void>();
@@ -54,20 +61,49 @@ export default function ProtectedShell({ children }: { children: React.ReactNode
 
         async function checkSession() {
             try {
-                const response = await fetch(backendAuthUrl("auth/get-session"), {
-                    credentials: "include",
+                const response = await authFetch("auth/get-session", {
                     cache: "no-store",
                 });
 
+                const data = (await response.json().catch(() => null)) as (SessionErrorPayload & {
+                    user?: {
+                        id?: string;
+                        email?: string;
+                        emailVerified?: boolean;
+                    };
+                }) | null;
+
                 if (!response.ok) {
+                    const code = data?.code || data?.error;
+
+                    if (code === "EMAIL_NOT_VERIFIED" || data?.action === "VERIFY_EMAIL") {
+                        const email = typeof data?.email === "string" ? data.email : "";
+                        router.replace(email ? `/verify-email?email=${encodeURIComponent(email)}` : "/verify-email");
+                        return;
+                    }
+
+                    if (code === "ORGANIZATION_REQUIRED") {
+                        router.replace("/workspaces/create");
+                        return;
+                    }
+
+                    if (code === "SESSION_READ_FAILED") {
+                        router.replace("/login?message=session_expired");
+                        return;
+                    }
+
                     router.replace("/login");
                     return;
                 }
 
-                const data = await response.json().catch(() => null);
-
                 if (!data?.user?.id) {
                     router.replace("/login");
+                    return;
+                }
+
+                if (data.user.emailVerified === false) {
+                    const email = typeof data.user.email === "string" ? data.user.email : "";
+                    router.replace(email ? `/verify-email?email=${encodeURIComponent(email)}` : "/verify-email");
                     return;
                 }
 

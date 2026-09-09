@@ -3,28 +3,39 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { backendAuthUrl } from "@/util/backend-api";
+import { useRouter } from "next/navigation";
+import { authFetch } from "@/util/backend-api";
+
+const PENDING_EMAIL_VERIFICATION_KEY = "amplypost:pending-email-verification";
+
+function normalizeEmail(value: string) {
+    return value.trim().toLowerCase();
+}
 
 export default function CreateAccountForm() {
+    const router = useRouter();
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
 
     const handleGoogleSignup = async () => {
         setIsGoogleLoading(true);
         setErrorMessage("");
+        setSuccessMessage("");
 
         try {
-            const response = await fetch(backendAuthUrl("auth/sign-in/social"), {
+            const response = await authFetch("auth/sign-in/social", {
                 method: "POST",
-                credentials: "include",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     provider: "google",
                     callbackURL: `${window.location.origin}/dashboard`,
+                    newUserCallbackURL: `${window.location.origin}/dashboard`,
+                    errorCallbackURL: `${window.location.origin}/login`,
                 }),
             });
 
@@ -59,28 +70,43 @@ export default function CreateAccountForm() {
         e.preventDefault();
         setIsLoading(true);
         setErrorMessage("");
+        setSuccessMessage("");
 
         try {
-            const response = await fetch(backendAuthUrl("auth/sign-up/email"), {
+            const normalizedName = name.trim();
+            const normalizedEmail = normalizeEmail(email);
+
+            if (!normalizedName) {
+                throw new Error("Enter your name to create an account.");
+            }
+
+            const response = await authFetch("auth/sign-up/email", {
                 method: "POST",
                 headers: {
                     "content-type": "application/json",
                 },
-                credentials: "include",
                 body: JSON.stringify({
-                    name,
-                    email,
+                    name: normalizedName,
+                    email: normalizedEmail,
                     password,
-                    rememberMe: true,
                 }),
             });
 
             if (!response.ok) {
                 const data = await response.json().catch(() => null);
+                if (data?.action === "VERIFY_EMAIL" || data?.code === "EMAIL_NOT_VERIFIED") {
+                    window.localStorage.setItem(PENDING_EMAIL_VERIFICATION_KEY, normalizedEmail);
+                    setSuccessMessage(data?.message ?? "Email verification required.");
+                    router.push(`/verify-email?email=${encodeURIComponent(normalizedEmail)}`);
+                    return;
+                }
+
                 throw new Error(data?.message ?? "Unable to create account.");
             }
 
-            window.location.assign("/dashboard");
+            window.localStorage.setItem(PENDING_EMAIL_VERIFICATION_KEY, normalizedEmail);
+            setSuccessMessage("Check your email for a verification code.");
+            router.push(`/verify-email?email=${encodeURIComponent(normalizedEmail)}`);
         } catch (error) {
             setErrorMessage(
                 error instanceof Error
@@ -140,7 +166,6 @@ export default function CreateAccountForm() {
                         <span>{isGoogleLoading ? "Connecting..." : "Continue with Google"}</span>
                     </button>
 
-                    {/* Divider */}
                     <div className="my-6 flex items-center gap-4">
                         <div className="h-px flex-1 bg-border"></div>
                         <span className="text-xs text-muted-foreground">OR</span>
@@ -151,6 +176,12 @@ export default function CreateAccountForm() {
                         {errorMessage && (
                             <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                                 {errorMessage}
+                            </div>
+                        )}
+
+                        {successMessage && (
+                            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+                                {successMessage}
                             </div>
                         )}
 

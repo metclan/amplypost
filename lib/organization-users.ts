@@ -1,7 +1,7 @@
 "use client";
 
 import { parseApiErrorResponse } from "@/lib/client-errors";
-import { backendApiUrl } from "@/util/backend-api";
+import { apiFetch } from "@/util/backend-api";
 
 export const ORGANIZATION_USERS_CACHE_KEY = "organization-users";
 
@@ -70,9 +70,7 @@ function extractUsers(payload: UsersResponse | RawOrganizationUser[] | null) {
 }
 
 export async function fetchOrganizationUsers() {
-    const response = await fetch(backendApiUrl("users"), {
-        credentials: "include",
-    });
+    const response = await apiFetch("users");
 
     if (!response.ok) {
         await parseApiErrorResponse(response, "Failed to fetch organization users.");

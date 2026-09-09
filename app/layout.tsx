@@ -125,6 +125,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         {/* Structured Data - SoftwareApplication */}
          <meta name="facebook-domain-verification" content="f58unlmeqjjlyqcl1kkck5vos94aqw" />
+         <meta name="ory-verify" content="orynth-275c9630aa824d5f865a9e421f35e5ed" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

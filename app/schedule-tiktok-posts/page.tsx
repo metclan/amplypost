@@ -1,0 +1,15 @@
+import type { Metadata } from "next";
+
+import MarketingLandingPage from "@/app/components/marketing-landing-page";
+import { getLandingPage } from "@/lib/marketing-landing-pages";
+
+const page = getLandingPage("schedule-tiktok-posts");
+
+export const metadata: Metadata = {
+    title: page.metaTitle,
+    description: page.metaDescription,
+};
+
+export default function ScheduleTikTokPostsPage() {
+    return <MarketingLandingPage page={page} />;
+}

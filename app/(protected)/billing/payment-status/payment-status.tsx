@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, ArrowRight, CheckCircle2, CreditCard, Loader2, Mail } from "lucide-react";
 import { invalidateCachedResource } from "@/lib/client-cache";
-import { backendApiUrl } from "@/util/backend-api";
+import { apiFetch } from "@/util/backend-api";
 
 type Subscription = {
     status?: string;
@@ -23,8 +23,7 @@ function wait(ms: number) {
 }
 
 async function fetchCurrentSubscription() {
-    const response = await fetch(backendApiUrl("billing/subscriptions/current"), {
-        credentials: "include",
+    const response = await apiFetch("billing/subscriptions/current", {
         cache: "no-store",
     });
 

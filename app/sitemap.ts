@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { getAllBlogPosts } from "@/lib/blog";
-import { platforms } from "@/lib/platforms";
+import { landingPageSlugs } from "@/lib/marketing-landing-pages";
 
 const siteUrl = (
     process.env.NEXT_PUBLIC_SITE_URL ||
@@ -27,6 +27,12 @@ const staticRoutes: Array<{
     { path: "/tools/tiktok-downloader", lastModified: new Date("2026-07-15"), changeFrequency: "monthly", priority: 0.7 },
     { path: "/tools/youtube-downloader", lastModified: new Date("2026-07-15"), changeFrequency: "monthly", priority: 0.7 },
     { path: "/tools/convert-image", lastModified: new Date("2026-07-15"), changeFrequency: "monthly", priority: 0.7 },
+    ...landingPageSlugs.map((slug) => ({
+        path: `/${slug}`,
+        lastModified: new Date("2026-08-27"),
+        changeFrequency: "monthly" as const,
+        priority: 0.85,
+    })),
 ];
 
 // Legal/utility pages — low priority, rarely change, no need to signal freshness
@@ -51,13 +57,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: 0.3,
     }));
 
-    const platformEntries: SitemapEntry[] = platforms.map((platform) => ({
-        url: `${siteUrl}/platforms/${platform.slug}`,
-        lastModified: new Date("2026-08-01"),
-        changeFrequency: "monthly",
-        priority: 0.8,
-    }));
-
     const blogPosts = getAllBlogPosts();
     const blogEntries: SitemapEntry[] = blogPosts.map((post) => ({
         url: `${siteUrl}/blog/${post.slug}`,
@@ -68,7 +67,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     return [
         ...staticEntries,
-        ...platformEntries,
         ...legalEntries,
         ...blogEntries,
     ];

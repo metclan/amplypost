@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { GetAmplypostCard } from "@/app/components/get-amplypost-card";
-import { backendApiUrl } from "@/util/backend-api";
+import { apiFetch, backendApiUrl } from "@/util/backend-api";
 
 type MediaDetail = {
     type: "video" | "image";
@@ -47,7 +47,7 @@ export default function InstagramDownloader() {
         setResult(null);
 
         try {
-            const res = await fetch(backendApiUrl("tools/instagram-downloader"), {
+            const res = await apiFetch("tools/instagram-downloader", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ url: trimmed }),

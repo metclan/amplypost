@@ -7,7 +7,7 @@ import { Bookmark, Clock3, FileText, Heart, MessageCircle, MoreHorizontal, Repea
 import { getDaysInMonth, getFirstDayOfMonth, getMonthName, isToday } from "@/util/date-utils";
 import { useCachedResource } from "@/lib/client-cache";
 import { CACHE_TTL, POSTS_CACHE_PREFIX, getPlatformLogo } from "@/lib/client-data";
-import { backendApiUrl } from "@/util/backend-api";
+import { apiFetch } from "@/util/backend-api";
 
 type PostStatus = "published" | "failed" | "scheduled" | "pending" | "processing" | string;
 
@@ -349,9 +349,7 @@ export function DetailSkeleton() {
 }
 
 async function fetchCalendarPosts(params: URLSearchParams) {
-    const response = await fetch(backendApiUrl(`posts?${params.toString()}`), {
-        credentials: "include",
-    });
+    const response = await apiFetch(`posts?${params.toString()}`);
 
     if (!response.ok) throw new Error("Failed to fetch posts");
 
@@ -406,8 +404,7 @@ export default function CalendarView() {
         setPostDetailsError(null);
 
         try {
-            const response = await fetch(backendApiUrl(`posts/${post.id}`), {
-                credentials: "include",
+            const response = await apiFetch(`posts/${post.id}`, {
                 cache: "no-store",
             });
             if (!response.ok) throw new Error("Failed to fetch post details");

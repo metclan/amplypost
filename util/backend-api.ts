@@ -1,6 +1,6 @@
 import { config } from "@/util/config";
 
-function joinConfiguredUrl(base: string, path: string) {
+export function joinConfiguredUrl(base: string, path: string) {
     const baseUrl = base.endsWith("/") ? base : `${base}/`;
     const normalizedPath = path.replace(/^\/+/, "");
 
@@ -19,4 +19,18 @@ export function backendApiUrlWithParams(path: string, params: URLSearchParams) {
     const query = params.toString();
 
     return query ? `${backendApiUrl(path)}?${query}` : backendApiUrl(path);
+}
+
+export function apiFetch(path: string, init: RequestInit = {}) {
+    return fetch(backendApiUrl(path), {
+        ...init,
+        credentials: "include",
+    });
+}
+
+export function authFetch(path: string, init: RequestInit = {}) {
+    return fetch(backendAuthUrl(path), {
+        ...init,
+        credentials: "include",
+    });
 }

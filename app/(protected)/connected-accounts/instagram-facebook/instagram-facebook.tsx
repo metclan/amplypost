@@ -8,7 +8,7 @@ import Image from "next/image";
 import { Spinner } from "@/components/ui/spinner";
 import { invalidateAccountData } from "@/lib/client-data";
 import { isSubscriptionRequiredError, parseApiErrorResponse } from "@/lib/client-errors";
-import { config } from "@/util/config";
+import { apiFetch } from "@/util/backend-api";
 
 export default function InstagramCallback() {
     const router = useRouter();
@@ -40,12 +40,11 @@ export default function InstagramCallback() {
             }
 
             try {
-                const response = await fetch(`${config.backendUrl}auth/instagram-facebook`, {
+                const response = await apiFetch("auth/instagram-facebook", {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    credentials: "include",
                     body: JSON.stringify({ code }),
                 });
 

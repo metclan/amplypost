@@ -2,7 +2,7 @@
 
 import { fetchCachedResource, invalidateCachedResource } from "@/lib/client-cache";
 import { parseApiErrorResponse } from "@/lib/client-errors";
-import { backendApiUrl, backendApiUrlWithParams } from "@/util/backend-api";
+import { apiFetch } from "@/util/backend-api";
 
 export const ACCOUNTS_CACHE_KEY = "accounts:v3";
 export const DASHBOARD_CACHE_PREFIX = "dashboard";
@@ -109,9 +109,7 @@ export function normalizeAccount(account: BackendAccount): ConnectedAccount {
 }
 
 export async function fetchAccounts() {
-    const response = await fetch(backendApiUrl("accounts"), {
-        credentials: "include",
-    });
+    const response = await apiFetch("accounts");
     if (!response.ok) {
         await parseApiErrorResponse(response, "Failed to fetch connected accounts.");
     }
@@ -125,9 +123,7 @@ export function getDashboardCacheKey(params: URLSearchParams) {
 }
 
 export async function fetchDashboardTotals(params: URLSearchParams) {
-    const response = await fetch(backendApiUrlWithParams("dashboard", params), {
-        credentials: "include",
-    });
+    const response = await apiFetch(`dashboard?${params.toString()}`);
     if (!response.ok) {
         await parseApiErrorResponse(response, "Failed to load dashboard.");
     }
@@ -140,9 +136,7 @@ export async function fetchDashboardTotals(params: URLSearchParams) {
 }
 
 export async function fetchRecentPosts(limit = 5) {
-    const response = await fetch(backendApiUrl(`dashboard/recent-posts?limit=${limit}`), {
-        credentials: "include",
-    });
+    const response = await apiFetch(`dashboard/recent-posts?limit=${limit}`);
     if (!response.ok) {
         await parseApiErrorResponse(response, "Failed to load recent posts.");
     }

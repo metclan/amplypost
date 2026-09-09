@@ -9,7 +9,7 @@ import { CheckCircle2, ImageIcon, RefreshCw, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { invalidateAccountData } from "@/lib/client-data";
-import { config } from "@/util/config";
+import { apiFetch } from "@/util/backend-api";
 import { connectPinterest } from "@/util/social-connect";
 
 type ConnectionState = "loading" | "select-board" | "success" | "error";
@@ -47,9 +47,6 @@ type StatusPanelProps = {
     message: string;
     details?: string;
 };
-
-const pinterestConnectUrl = `${config.backendUrl}accounts/pinterest/connect`;
-const pinterestSelectBoardUrl = `${config.backendUrl}accounts/pinterest/select-board`;
 
 function getSavedPinterestBoards(account: PinterestAccount) {
     const config = account.platformConfig;
@@ -410,12 +407,11 @@ export default function ConnectPinterest() {
         setBoardSelectionError(undefined);
 
         try {
-            const response = await fetch(pinterestSelectBoardUrl, {
+            const response = await apiFetch("accounts/pinterest/select-board", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                credentials: "include",
                 body: JSON.stringify({
                     accountId: account.id,
                     boardId: selectedBoardIds[0],
@@ -480,12 +476,11 @@ export default function ConnectPinterest() {
             }
 
             try {
-                const response = await fetch(pinterestConnectUrl, {
+                const response = await apiFetch("accounts/pinterest/connect", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
                     },
-                    credentials: "include",
                     body: JSON.stringify({ code }),
                 });
 

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { invalidateAccountData } from "@/lib/client-data";
 import { isSubscriptionRequiredError, parseApiErrorResponse } from "@/lib/client-errors";
-import { config } from "@/util/config";
+import { apiFetch } from "@/util/backend-api";
 
 type ConnectionState = "loading" | "success" | "error";
 
@@ -20,8 +20,6 @@ type StatusPanelProps = {
     message: string;
     details?: string;
 };
-
-const instagramConnectUrl = `${config.backendUrl}accounts/instagram/connect`;
 
 function PageHeader() {
     return (
@@ -117,12 +115,11 @@ export default function InstagramCallback() {
             }
 
             try {
-                const response = await fetch(instagramConnectUrl, {
+                const response = await apiFetch("accounts/instagram/connect", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
                     },
-                    credentials: "include",
                     body: JSON.stringify({ code }),
                 });
 

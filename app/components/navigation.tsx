@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import ThemeToggle from "./theme-toggle";
-import { backendAuthUrl } from "@/util/backend-api";
+import { authFetch } from "@/util/backend-api";
 
 type AuthUser = {
     id?: string;
@@ -19,9 +19,7 @@ export default function Navigation() {
     useEffect(() => {
         const getUser = async () => {
             try {
-                const response = await fetch(backendAuthUrl("auth/get-session"), {
-                    credentials: "include",
-                });
+                const response = await authFetch("auth/get-session");
 
                 if (!response.ok) {
                     setUser(null);

@@ -3,20 +3,33 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { backendAuthUrl } from "@/util/backend-api";
+import { useRouter } from "next/navigation";
+import { authFetch } from "@/util/backend-api";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
 type AuthMode = "password" | "otp";
 type AuthMethod = AuthMode | "google";
 const LAST_AUTH_METHOD_KEY = "amplypost:last-auth-method";
+const PENDING_EMAIL_VERIFICATION_KEY = "amplypost:pending-email-verification";
+const RESEND_COOLDOWN_SECONDS = 60;
+
+function requiresEmailVerification(response: Response, data: { action?: unknown; code?: unknown } | null) {
+    return (
+        response.status === 403 &&
+        (data?.action === "VERIFY_EMAIL" || data?.code === "EMAIL_NOT_VERIFIED")
+    );
+}
 
 export default function LoginForm() {
+    const router = useRouter();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [otp, setOtp] = useState("");
     const [authMode, setAuthMode] = useState<AuthMode>("otp");
     const [lastAuthMode, setLastAuthMode] = useState<AuthMethod | null>(null);
     const [otpSent, setOtpSent] = useState(false);
+    const [otpCooldown, setOtpCooldown] = useState(0);
+    const [showVerifyEmailAction, setShowVerifyEmailAction] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
@@ -30,10 +43,31 @@ export default function LoginForm() {
         }
     }, []);
 
+    useEffect(() => {
+        if (otpCooldown <= 0) return;
+
+        const timer = window.setTimeout(() => setOtpCooldown((seconds) => Math.max(0, seconds - 1)), 1000);
+
+        return () => window.clearTimeout(timer);
+    }, [otpCooldown]);
+
     const selectAuthMode = (mode: AuthMode) => {
         setAuthMode(mode);
+        setShowVerifyEmailAction(false);
         setErrorMessage("");
         setSuccessMessage("");
+    };
+
+    const showEmailVerificationRequired = (message?: string) => {
+        const normalizedEmail = email.trim().toLowerCase();
+
+        if (normalizedEmail) {
+            window.localStorage.setItem(PENDING_EMAIL_VERIFICATION_KEY, normalizedEmail);
+        }
+
+        setShowVerifyEmailAction(true);
+        setSuccessMessage("");
+        setErrorMessage(message ?? "Your email is not verified. Verify your email before logging in.");
     };
 
     const saveLastAuthMode = (mode: AuthMethod) => {
@@ -47,13 +81,14 @@ export default function LoginForm() {
         setSuccessMessage("");
 
         try {
-            const response = await fetch(backendAuthUrl("auth/sign-in/social"), {
+            const response = await authFetch("auth/sign-in/social", {
                 method: "POST",
-                credentials: "include",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     provider: "google",
                     callbackURL: `${window.location.origin}/dashboard`,
+                    newUserCallbackURL: `${window.location.origin}/dashboard`,
+                    errorCallbackURL: `${window.location.origin}/login`,
                 }),
             });
 
@@ -93,12 +128,11 @@ export default function LoginForm() {
         setSuccessMessage("");
 
         try {
-            const response = await fetch(backendAuthUrl("auth/sign-in/email"), {
+            const response = await authFetch("auth/sign-in/email", {
                 method: "POST",
                 headers: {
                     "content-type": "application/json",
                 },
-                credentials: "include",
                 body: JSON.stringify({
                     email,
                     password,
@@ -108,6 +142,11 @@ export default function LoginForm() {
 
             if (!response.ok) {
                 const data = await response.json().catch(() => null);
+                if (requiresEmailVerification(response, data)) {
+                    showEmailVerificationRequired(data?.message);
+                    return;
+                }
+
                 throw new Error(data?.message ?? "Invalid email or password.");
             }
 
@@ -131,22 +170,31 @@ export default function LoginForm() {
         setSuccessMessage("");
 
         try {
-            const response = await fetch(backendAuthUrl("auth/email-otp/send-verification-otp"), {
+            if (otpCooldown > 0) return;
+
+            const normalizedEmail = email.trim().toLowerCase();
+            const response = await authFetch("auth/email-otp/send-verification-otp", {
                 method: "POST",
-                credentials: "include",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    email,
+                    email: normalizedEmail,
                     type: "sign-in",
                 }),
             });
 
             if (!response.ok) {
                 const data = await response.json().catch(() => null);
+                if (requiresEmailVerification(response, data)) {
+                    showEmailVerificationRequired(data?.message);
+                    return;
+                }
+
                 throw new Error(data?.message ?? "Unable to send verification code.");
             }
 
             setOtpSent(true);
+            setOtpCooldown(RESEND_COOLDOWN_SECONDS);
+            setEmail(normalizedEmail);
             setOtp("");
             setSuccessMessage("Verification code sent. Check your email.");
         } catch (error) {
@@ -167,9 +215,8 @@ export default function LoginForm() {
         setSuccessMessage("");
 
         try {
-            const response = await fetch(backendAuthUrl("auth/sign-in/email-otp"), {
+            const response = await authFetch("auth/sign-in/email-otp", {
                 method: "POST",
-                credentials: "include",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     email,
@@ -179,6 +226,11 @@ export default function LoginForm() {
 
             if (!response.ok) {
                 const data = await response.json().catch(() => null);
+                if (requiresEmailVerification(response, data)) {
+                    showEmailVerificationRequired(data?.message);
+                    return;
+                }
+
                 throw new Error(data?.message ?? "Invalid or expired verification code.");
             }
 
@@ -193,6 +245,18 @@ export default function LoginForm() {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const goToVerifyEmail = () => {
+        const normalizedEmail = email.trim().toLowerCase();
+
+        if (normalizedEmail) {
+            window.localStorage.setItem(PENDING_EMAIL_VERIFICATION_KEY, normalizedEmail);
+            router.push(`/verify-email?email=${encodeURIComponent(normalizedEmail)}`);
+            return;
+        }
+
+        router.push("/verify-email");
     };
 
     return (
@@ -257,7 +321,18 @@ export default function LoginForm() {
 
                     {errorMessage && (
                         <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                            {errorMessage}
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <span>{errorMessage}</span>
+                                {showVerifyEmailAction && (
+                                    <button
+                                        type="button"
+                                        onClick={goToVerifyEmail}
+                                        className="cursor-pointer text-left text-sm font-semibold text-primary hover:underline"
+                                    >
+                                        Verify email
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     )}
 
@@ -303,7 +378,13 @@ export default function LoginForm() {
                     </div>
 
                     <form
-                        onSubmit={authMode === "password" ? handleLogin : otpSent ? handleOtpLogin : handleSendOtp}
+                        onSubmit={
+                            authMode === "password"
+                                ? handleLogin
+                                : otpSent
+                                    ? handleOtpLogin
+                                    : handleSendOtp
+                        }
                         className="space-y-4"
                     >
                         <div>
@@ -364,7 +445,10 @@ export default function LoginForm() {
 
                         <button
                             type="submit"
-                            disabled={isLoading || (authMode === "otp" && otpSent && otp.length < 6)}
+                            disabled={
+                                isLoading ||
+                                (authMode === "otp" && otpSent && otp.length < 6)
+                            }
                             className="w-full cursor-pointer rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-primary/90 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {isLoading
@@ -377,17 +461,17 @@ export default function LoginForm() {
                                         ? "Verify code"
                                         : "Send verification code"}
                         </button>
-
                         {authMode === "otp" && otpSent && (
                             <button
-                                type="button"
-                                onClick={handleSendOtp}
-                                disabled={isLoading}
-                                className="w-full cursor-pointer text-sm font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                Resend code
-                            </button>
+                            type="button"
+                            onClick={handleSendOtp}
+                            disabled={isLoading || otpCooldown > 0}
+                            className="w-full cursor-pointer text-sm font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {otpCooldown > 0 ? `Resend in ${otpCooldown}s` : "Resend code"}
+                        </button>
                         )}
+
                     </form>
 
                     {/* Sign Up Link */}

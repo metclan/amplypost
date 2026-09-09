@@ -40,7 +40,7 @@ import {
     invalidateAccountData,
     type ConnectedAccount,
 } from "@/lib/client-data";
-import { backendApiUrl } from "@/util/backend-api";
+import { apiFetch } from "@/util/backend-api";
 
 type Platform = {
     id: string;
@@ -180,12 +180,11 @@ export default function ConnectedAccounts() {
 
         setIsConnectingBluesky(true);
         try {
-            const response = await fetch(backendApiUrl("accounts/bluesky/connect"), {
+            const response = await apiFetch("accounts/bluesky/connect", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                credentials: "include",
                 body: JSON.stringify({
                     identifier,
                     password,
@@ -239,9 +238,8 @@ export default function ConnectedAccounts() {
         try {
             setIsDeleting(true);
 
-            const response = await fetch(backendApiUrl(`accounts/${accountToDelete}`), {
+            const response = await apiFetch(`accounts/${accountToDelete}`, {
                 method: "DELETE",
-                credentials: "include",
             });
 
             const data = await response.json().catch(() => null);

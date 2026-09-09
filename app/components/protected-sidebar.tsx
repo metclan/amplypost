@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { backendAuthUrl } from "@/util/backend-api";
+import { authFetch } from "@/util/backend-api";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -50,9 +50,8 @@ export default function ProtectedSidebar({
     pathname === href || pathname.startsWith(`${href}/`);
 
   const handleLogout = async () => {
-    await fetch(backendAuthUrl("auth/sign-out"), {
-      method: "POST",
-      credentials: "include",
+    await authFetch("auth/sign-out", {
+        method: "POST",
     });
     router.push("/login");
     router.refresh();
@@ -130,7 +129,7 @@ export default function ProtectedSidebar({
         </Link>
 
         <div className={collapsed ? "flex h-12 w-12 items-center justify-center" : ""}>
-          <ThemeToggle showLabel={!collapsed} />
+          <ThemeToggle showLabel={!collapsed} variant={collapsed ? "button" : "segmented"} />
         </div>
 
         <button

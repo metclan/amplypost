@@ -39,7 +39,7 @@ async function proxyAuthRequest(request: NextRequest, context: RouteContext) {
 
   if (!targetUrl) {
     return NextResponse.json(
-      { message: "NEXT_PUBLIC_BACKEND_URL is not configured." },
+      { message: "NEXT_PUBLIC_API_URL is not configured." },
       { status: 500 },
     );
   }
@@ -64,6 +64,7 @@ async function proxyAuthRequest(request: NextRequest, context: RouteContext) {
     body: ["GET", "HEAD"].includes(request.method)
       ? undefined
       : await request.arrayBuffer(),
+    credentials: "include",
     redirect: "manual",
     cache: "no-store",
   });

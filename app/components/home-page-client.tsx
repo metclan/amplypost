@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
     CalendarDays,
     ChevronRight,
@@ -10,8 +10,6 @@ import {
     LayoutDashboard,
     Link2,
     LockKeyhole,
-    Menu,
-    Play,
     Send,
     ShieldCheck,
     Sparkles,
@@ -20,18 +18,10 @@ import {
     X,
 } from "lucide-react";
 
-import ThemeToggle from "./theme-toggle";
+import MarketingHeader from "./marketing-header";
 import Pricing from "./pricing";
 import { platforms } from "@/lib/platforms";
-import { backendAuthUrl } from "@/util/backend-api";
-
-const DEMO_VIDEO_ID = process.env.NEXT_PUBLIC_AMPLYPOST_DEMO_VIDEO_ID;
-
-type AuthUser = {
-    id?: string;
-    email?: string;
-    name?: string;
-};
+import { platformLandingHrefBySlug } from "@/lib/marketing-landing-pages";
 
 const steps = [
     {
@@ -103,6 +93,26 @@ const faqItems = [
     },
 ];
 
+const solutionLinks = [
+    ["Facebook scheduler", "/schedule-facebook-posts"],
+    ["TikTok scheduler", "/schedule-tiktok-posts"],
+    ["YouTube Shorts scheduler", "/schedule-youtube-shorts"],
+    ["Instagram scheduler", "/instagram-post-scheduler"],
+    ["LinkedIn scheduler", "/linkedin-post-scheduler"],
+    ["X scheduler", "/schedule-x-posts"],
+    ["Threads scheduler", "/schedule-threads-posts"],
+    ["Bluesky scheduler", "/schedule-bluesky-posts"],
+    ["Pinterest scheduler", "/pinterest-post-scheduler"],
+    ["Google Business Profile scheduler", "/google-business-profile-post-scheduler"],
+    ["Small business scheduler", "/social-media-scheduler-for-small-businesses"],
+    ["Agency scheduler", "/social-media-scheduler-for-agencies"],
+    ["Nigerian business scheduler", "/social-media-scheduler-for-nigerian-businesses"],
+    ["Buffer alternative", "/buffer-alternative"],
+    ["Hootsuite alternative", "/hootsuite-alternative"],
+    ["Metricool alternative", "/metricool-alternative"],
+    ["Multi-platform scheduler", "/schedule-one-post-to-multiple-platforms"],
+];
+
 function SectionHeading({
     eyebrow,
     title,
@@ -132,50 +142,17 @@ function SectionHeading({
 }
 
 function DemoVideo() {
-    const [isLoaded, setIsLoaded] = useState(false);
-    const canLoadVideo = Boolean(DEMO_VIDEO_ID);
-
     return (
         <div className="mt-10 overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
-            <div className="relative aspect-video bg-muted">
-                {isLoaded && canLoadVideo ? (
-                    <iframe
-                        className="h-full w-full"
-                        src={`https://www.youtube.com/embed/${DEMO_VIDEO_ID}?rel=0`}
-                        title="Amplypost product walkthrough"
-                        loading="lazy"
-                        allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        allowFullScreen
-                    />
-                ) : (
-                    <button
-                        type="button"
-                        onClick={() => canLoadVideo && setIsLoaded(true)}
-                        className="group relative h-full w-full overflow-hidden text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
-                        aria-label={
-                            canLoadVideo
-                                ? "Play Amplypost product walkthrough"
-                                : "Amplypost product walkthrough video coming soon"
-                        }
-                    >
-                        <Image
-                            src="/amplypost-dashboard.png"
-                            alt="Amplypost dashboard preview used as video thumbnail"
-                            fill
-                            sizes="(min-width: 1024px) 960px, 100vw"
-                            className="object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/20" />
-                        <span className="absolute left-1/2 top-1/2 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-primary shadow-2xl transition-transform group-hover:scale-105">
-                            <Play className="ml-1 h-8 w-8 fill-current" />
-                        </span>
-                        {!canLoadVideo && (
-                            <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-background/95 px-4 py-2 text-xs font-semibold text-foreground shadow-sm">
-                                Demo video coming soon
-                            </span>
-                        )}
-                    </button>
-                )}
+            <div className="group relative aspect-[209/135] bg-black">
+                <iframe
+                    className="h-full w-full"
+                    src="https://www.youtube.com/embed/Mvx7EasIecQ"
+                    title="How to schedule and publish contents to social media platforms using Amplypost"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    allowFullScreen
+                />
             </div>
         </div>
     );
@@ -268,125 +245,9 @@ function BrowserMockup({
 }
 
 export default function HomePageClient() {
-    const [user, setUser] = useState<AuthUser | null>(null);
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-    useEffect(() => {
-        let ignore = false;
-
-        async function getUser() {
-            try {
-                const response = await fetch(backendAuthUrl("auth/get-session"), {
-                    credentials: "include",
-                });
-
-                if (!response.ok) {
-                    if (!ignore) setUser(null);
-                    return;
-                }
-
-                const data = await response.json();
-                if (!ignore) setUser(data?.user ?? null);
-            } catch {
-                if (!ignore) setUser(null);
-            }
-        }
-
-        getUser();
-
-        return () => {
-            ignore = true;
-        };
-    }, []);
-
     return (
         <div className="min-h-screen bg-background text-foreground">
-            <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur">
-                <nav className="mx-auto grid h-16 max-w-7xl grid-cols-2 items-center px-4 sm:px-6 lg:grid-cols-[1fr_auto_1fr] lg:px-8">
-                    <Link href="/" className="flex items-center gap-2" aria-label="Amplypost home">
-                        <Image
-                            src="/amplypost-logo.png"
-                            alt="Amplypost logo"
-                            width={34}
-                            height={34}
-                            className="h-8 w-8"
-                            priority
-                        />
-                        <span className="text-xl font-bold tracking-tight">Amplypost</span>
-                    </Link>
-
-                    <div className="hidden items-center justify-center gap-6 lg:flex">
-                        <a href="#pricing" className="text-sm font-medium text-muted-foreground hover:text-foreground">Pricing</a>
-                        <a href="#features" className="text-sm font-medium text-muted-foreground hover:text-foreground">Features</a>
-                        <a href="#how-it-works" className="text-sm font-medium text-muted-foreground hover:text-foreground">How it Works</a>
-                        <a href="#faq" className="text-sm font-medium text-muted-foreground hover:text-foreground">FAQ</a>
-                    </div>
-
-                    <div className="hidden items-center justify-end gap-3 lg:flex">
-                        {user ? (
-                            <Link href="/dashboard" className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary/90">
-                                Dashboard
-                            </Link>
-                        ) : (
-                            <>
-                                <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground">Login</Link>
-                                <Link href="/create-account" className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary/90">
-                                    Try it for free
-                                </Link>
-                            </>
-                        )}
-                        <ThemeToggle showLabel={false} />
-                    </div>
-
-                    <div className="flex items-center justify-end gap-2 lg:hidden">
-                        <Link href={user ? "/dashboard" : "/create-account"} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-primary/90">
-                            {user ? "Dashboard" : "Try free"}
-                        </Link>
-                        <button
-                            type="button"
-                            onClick={() => setIsMobileMenuOpen((value) => !value)}
-                            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-background text-foreground shadow-sm hover:bg-accent"
-                            aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
-                        >
-                            {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-                        </button>
-                    </div>
-                </nav>
-
-                {isMobileMenuOpen && (
-                    <div className="border-t border-border px-4 py-4 lg:hidden">
-                        <div className="mx-auto max-w-7xl space-y-2">
-                            {[
-                                ["Pricing", "#pricing"],
-                                ["Features", "#features"],
-                                ["How it Works", "#how-it-works"],
-                                ["FAQ", "#faq"],
-                            ].map(([label, href]) => (
-                                <a
-                                    key={label}
-                                    href={href}
-                                    onClick={() => setIsMobileMenuOpen(false)}
-                                    className="block rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
-                                >
-                                    {label}
-                                </a>
-                            ))}
-                            <div className="border-t border-border pt-3">
-                                <ThemeToggle />
-                            </div>
-                            {!user && (
-                                <Link
-                                    href="/login"
-                                    onClick={() => setIsMobileMenuOpen(false)}
-                                    className="block rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
-                                >
-                                    Login
-                                </Link>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </header>
+            <MarketingHeader />
 
             <main>
                 <section className="px-4 pb-20 pt-16 sm:px-6 sm:pb-24 sm:pt-20 lg:px-8">
@@ -395,7 +256,7 @@ export default function HomePageClient() {
                             {platforms.map((platform) => (
                                 <Link
                                     key={platform.name}
-                                    href={`/platforms/${platform.slug}`}
+                                    href={`/${platformLandingHrefBySlug[platform.slug]}`}
                                     className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card shadow-sm"
                                     title={platform.name}
                                 >
@@ -430,6 +291,37 @@ export default function HomePageClient() {
 
                         <div className="mx-auto mt-14 max-w-5xl">
                             <DemoVideo />
+                        </div>
+                        <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
+                            <a
+                                href="https://openhunts.com"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="OpenHunts Club"
+                            >
+                                <Image
+                                    alt="OpenHunts Club Member"
+                                    height={105}
+                                    src="https://cdn.openhunts.com/badges/club.webp"
+                                    style={{ width: 195, height: "auto" }}
+                                    width={486}
+                                    unoptimized
+                                />
+                            </a>
+                            <a
+                                href="https://index.dodopayments.com/amplypost?utm_source=index&utm_medium=badge&utm_campaign=embed&utm_content=tool-amplypost"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <Image
+                                    src="https://index.dodopayments.com/amplypost/badge.svg?theme=dark&width=250&height=50"
+                                    width={250}
+                                    height={50}
+                                    alt="Amplypost badge"
+                                    loading="lazy"
+                                    unoptimized
+                                />
+                            </a>
                         </div>
                     </div>
                 </section>
@@ -474,20 +366,6 @@ export default function HomePageClient() {
                     </div>
                 </section>
 
-                <section className="px-4 py-20 sm:px-6 lg:px-8">
-                    <div className="mx-auto max-w-5xl rounded-3xl border border-border bg-muted/35 p-5 sm:p-8 lg:p-10">
-                        <SectionHeading
-                            eyebrow="See Amplypost in action"
-                            title="See how easy it is to schedule your content"
-                            text="Watch a quick walkthrough of how to connect your accounts, create a post, choose your platforms, and schedule your content with Amplypost."
-                        />
-                        <DemoVideo />
-                        <p className="mx-auto mt-6 max-w-3xl text-center text-sm leading-6 text-muted-foreground">
-                            From connecting your first account to scheduling your first post, see the complete Amplypost workflow in just a few minutes.
-                        </p>
-                    </div>
-                </section>
-
                 <section id="platforms" className="px-4 py-20 sm:px-6 lg:px-8">
                     <div className="mx-auto max-w-7xl">
                         <SectionHeading
@@ -496,7 +374,7 @@ export default function HomePageClient() {
                         />
                         <div className="mx-auto mt-12 grid max-w-5xl grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-3">
                             {platforms.map((platform) => (
-                                <Link key={platform.name} href={`/platforms/${platform.slug}`} className="rounded-2xl border border-border bg-card p-4 text-center shadow-sm transition hover:-translate-y-1 hover:shadow-md">
+                                <Link key={platform.name} href={`/${platformLandingHrefBySlug[platform.slug]}`} className="rounded-2xl border border-border bg-card p-4 text-center shadow-sm transition hover:-translate-y-1 hover:shadow-md">
                                     <Image
                                         src={platform.logo}
                                         alt={`${platform.name} logo`}
@@ -668,7 +546,7 @@ export default function HomePageClient() {
                         </div>
                         {[
                             ["Product", [["Features", "#features"], ["Pricing", "#pricing"], ["FAQ", "#faq"], ["Login", "/login"]]],
-                            ["Platforms", platforms.map((platform) => [platform.name, `/platforms/${platform.slug}`])],
+                            ["Solutions", solutionLinks],
                             ["Legal", [["Privacy Policy", "/privacy"], ["Terms of Service", "/tos"], ["Google User Data Policy", "/privacy#google-user-data"]]],
                             ["Support", [["Contact", "mailto:support@amplypost.com"], ["Help/Support", "/support"]]],
                         ].map(([heading, links]) => (

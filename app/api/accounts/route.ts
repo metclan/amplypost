@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
       origin: request.nextUrl.origin,
       referer: request.nextUrl.href,
     },
+    credentials: "include",
     cache: "no-store",
   });
 
