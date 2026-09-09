@@ -71,10 +71,28 @@ interface UploadedMediaItem {
     key: string;
     mediaUrl: string;
     mediaType: MediaKind;
+    size: number;
     dimensions?: {
         width: number;
         height: number;
     };
+}
+
+function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
+    return new Promise((resolve, reject) => {
+        const objectUrl = URL.createObjectURL(file);
+        const image = new Image();
+
+        image.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            resolve({ width: image.naturalWidth, height: image.naturalHeight });
+        };
+        image.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error("Failed to read image dimensions"));
+        };
+        image.src = objectUrl;
+    });
 }
 
 function getVideoDimensions(file: File): Promise<{ width: number; height: number }> {
@@ -714,6 +732,7 @@ export default function ShortVideoClient() {
                     key,
                     mediaUrl: publicUrl,
                     mediaType: media.type,
+                    size: media.file.size,
                     dimensions: media.dimensions,
                 });
                 return next;
@@ -771,7 +790,13 @@ export default function ShortVideoClient() {
 
             const id = mediaIdCounterRef.current++;
             const type: MediaKind = isImage ? 'image' : 'video';
-            const dimensions = type === "video" ? await getVideoDimensions(file).catch(() => undefined) : undefined;
+            const dimensions = await (type === "image" ? getImageDimensions(file) : getVideoDimensions(file))
+                .catch(() => undefined);
+
+            if (type === "image" && !dimensions) {
+                alert(`${file.name}: Unable to read image dimensions. Please try a JPEG, PNG, GIF, or WebP image.`);
+                return null;
+            }
 
             return { id, file, type, dimensions };
         }));
@@ -1122,10 +1147,15 @@ export default function ShortVideoClient() {
                 media: mediaFiles
                     .map((media) => uploadedMedia.get(media.id))
                     .filter((media): media is UploadedMediaItem => Boolean(media))
-                    .map(({ mediaUrl, mediaType }) => ({
+                    .map(({ mediaUrl, mediaType, dimensions, size }) => ({
                         mediaUrl,
                         mediaType,
-                })),
+                        ...(mediaType === "image" ? {
+                            width: dimensions!.width,
+                            height: dimensions!.height,
+                            size,
+                        } : {}),
+                    })),
                 postAsStory,
                 storyOnly,
                 scheduledPublishDate,
