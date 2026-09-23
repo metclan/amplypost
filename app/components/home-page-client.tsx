@@ -301,10 +301,10 @@ export default function HomePageClient() {
                             >
                                 <Image
                                     alt="OpenHunts Club Member"
-                                    height={105}
+                                    height={55}
                                     src="https://cdn.openhunts.com/badges/club.webp"
-                                    style={{ width: 195, height: "auto" }}
-                                    width={486}
+                                    className="h-[55px] w-[212px] object-contain"
+                                    width={212}
                                     unoptimized
                                 />
                             </a>
@@ -315,9 +315,25 @@ export default function HomePageClient() {
                             >
                                 <Image
                                     src="https://index.dodopayments.com/amplypost/badge.svg?theme=dark&width=250&height=50"
-                                    width={250}
-                                    height={50}
+                                    width={212}
+                                    height={55}
+                                    className="h-[55px] w-[212px] object-contain"
                                     alt="Amplypost badge"
+                                    loading="lazy"
+                                    unoptimized
+                                />
+                            </a>
+                            <a
+                                href="https://postyourstartup.co/startup/amplypost?ref=badge"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <Image
+                                    src="https://postyourstartup.co/api/badge/amplypost?theme=light"
+                                    alt="Featured on PostYourStartup"
+                                    width={212}
+                                    height={55}
+                                    className="h-[55px] w-[212px] object-contain"
                                     loading="lazy"
                                     unoptimized
                                 />

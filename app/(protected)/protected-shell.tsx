@@ -7,6 +7,9 @@ import { prefetchProtectedData } from "@/lib/client-data";
 import { WorkspaceProvider } from "../components/workspace-provider";
 import { authFetch } from "@/util/backend-api";
 
+import { trackConfirmedSubscription, trackTikTok } from "@/lib/tiktok";
+import { apiFetch } from "@/util/backend-api";
+
 type SessionErrorPayload = {
     code?: string;
     error?: string;
@@ -70,6 +73,7 @@ export default function ProtectedShell({ children }: { children: React.ReactNode
                         id?: string;
                         email?: string;
                         emailVerified?: boolean;
+                        createdAt?: string;
                     };
                 }) | null;
 
@@ -108,6 +112,23 @@ export default function ProtectedShell({ children }: { children: React.ReactNode
                 }
 
                 if (!ignore) {
+                    const url = new URL(window.location.href);
+                    if (url.searchParams.get("registration") === "complete") {
+                        const age = Date.now() - Date.parse(data.user.createdAt ?? "");
+                        if (data.user.emailVerified && age >= 0 && age < 10 * 60_000) {
+                            void trackTikTok("CompleteRegistration", {
+                                contents: [{ content_id: "amplypost-account", content_type: "product", content_name: "Amplypost account" }],
+                            }, data.user, data.user.email ?? data.user.id);
+                        }
+                        url.searchParams.delete("registration");
+                        window.history.replaceState(window.history.state, "", url);
+                    }
+                    void apiFetch("billing/subscriptions/current", { cache: "no-store" })
+                        .then(async (response) => {
+                            if (!response.ok) return;
+                            const result = await response.json();
+                            if (result?.data) await trackConfirmedSubscription(result.data, data.user!);
+                        }).catch(() => {});
                     prefetchProtectedData();
                     setIsCheckingSession(false);
                 }

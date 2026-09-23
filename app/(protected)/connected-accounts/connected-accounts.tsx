@@ -1,4 +1,5 @@
 "use client";
+import { CanvaConnection } from "@/components/canva/connection";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Image from "next/image";
@@ -280,6 +281,8 @@ export default function ConnectedAccounts() {
                     </p>
                 </div>
             </div>
+
+            <CanvaConnection />
 
             <section className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">

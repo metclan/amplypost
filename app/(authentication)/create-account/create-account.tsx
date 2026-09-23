@@ -6,6 +6,8 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/util/backend-api";
 
+import { trackTikTok } from "@/lib/tiktok";
+
 const PENDING_EMAIL_VERIFICATION_KEY = "amplypost:pending-email-verification";
 
 function normalizeEmail(value: string) {
@@ -34,7 +36,7 @@ export default function CreateAccountForm() {
                 body: JSON.stringify({
                     provider: "google",
                     callbackURL: `${window.location.origin}/dashboard`,
-                    newUserCallbackURL: `${window.location.origin}/dashboard`,
+                    newUserCallbackURL: `${window.location.origin}/dashboard?registration=complete`,
                     errorCallbackURL: `${window.location.origin}/login`,
                 }),
             });
@@ -104,6 +106,10 @@ export default function CreateAccountForm() {
                 throw new Error(data?.message ?? "Unable to create account.");
             }
 
+            const created = await response.json().catch(() => null);
+            await trackTikTok("CompleteRegistration", {
+                contents: [{ content_id: "amplypost-account", content_type: "product", content_name: "Amplypost account" }],
+            }, { email: normalizedEmail, id: created?.user?.id }, normalizedEmail);
             window.localStorage.setItem(PENDING_EMAIL_VERIFICATION_KEY, normalizedEmail);
             setSuccessMessage("Check your email for a verification code.");
             router.push(`/verify-email?email=${encodeURIComponent(normalizedEmail)}`);

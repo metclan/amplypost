@@ -29,6 +29,9 @@ import { SubscriptionRequiredError, parseApiErrorResponse } from "@/lib/client-e
 import { useWorkspace } from "@/app/components/workspace-provider";
 import { accountBelongsToWorkspace } from "@/lib/workspaces";
 import { apiFetch } from "@/util/backend-api";
+import { CanvaConnection } from "@/components/canva/connection";
+import { CanvaPicker } from "@/components/canva/picker";
+import { canvaRequest, type CanvaMedia, type CanvaStatus } from "@/lib/canva";
 import { ACCEPTED_IMAGE_INPUT_TYPES, getMediaContentType, isAcceptedImageFile } from "@/util/media-files";
 
 type MediaKind = "image" | "video";
@@ -52,7 +55,7 @@ const PLATFORM_CAPTION_LIMITS: Record<string, number> = {
 
 interface MediaFileItem {
     id: number;
-    file: File;
+    file?: File;
     type: MediaKind;
     dimensions?: {
         width: number;
@@ -68,7 +71,8 @@ interface MediaPreviewItem {
 }
 
 interface UploadedMediaItem {
-    key: string;
+    key?: string;
+    imported?: CanvaMedia;
     mediaUrl: string;
     mediaType: MediaKind;
     size: number;
@@ -237,6 +241,77 @@ export default function ShortVideoClient() {
     const abortControllersRef = useRef<Map<number, AbortController>>(new Map());
     const previewUrlsRef = useRef<string[]>([]);
     const isUploadingMedia = uploadingIds.size > 0;
+
+    const [showCanvaPicker, setShowCanvaPicker] = useState(false);
+    const [canvaExportAllowed, setCanvaExportAllowed] = useState(false);
+    const draftRestored = useRef(false);
+    const importedUrls = useRef(new Set<string>());
+
+    function persistCanvaDraft() {
+        if (uploadingIds.size || uploadedMedia.size !== mediaFiles.length) {
+            throw new Error("Wait for media uploads to finish before connecting Canva.");
+        }
+        // Store durable URLs, never browser object URLs or Canva thumbnail/editor URLs.
+        const draft = { caption, selectedAccounts, tikTokConfigs, youTubeConfigs, captionMode,
+            accountCaptions, platformCaptions, storyPublishMode, scheduleOption,
+            scheduledDateTime: scheduledDateTime?.toISOString(), scheduledTime, scheduledTimezone,
+            media: mediaFiles.map(item => ({ id: item.id, type: item.type, dimensions: item.dimensions,
+                name: mediaPreviews.find(preview => preview.id === item.id)?.name || "Media",
+                uploaded: uploadedMedia.get(item.id)! })) };
+        sessionStorage.setItem("amplypost:canva-composer-draft", JSON.stringify(draft));
+    }
+
+    useEffect(() => {
+        if (isLoadingAccounts || draftRestored.current) return;
+        draftRestored.current = true;
+        try {
+            const stored = sessionStorage.getItem("amplypost:canva-composer-draft");
+            if (stored) {
+                const draft = JSON.parse(stored);
+                setCaption(draft.caption); setSelectedAccounts(draft.selectedAccounts);
+                setTikTokConfigs(draft.tikTokConfigs); setYouTubeConfigs(draft.youTubeConfigs);
+                setCaptionMode(draft.captionMode); setAccountCaptions(draft.accountCaptions);
+                setPlatformCaptions(draft.platformCaptions); setStoryPublishMode(draft.storyPublishMode);
+                setScheduleOption(draft.scheduleOption); setScheduledTime(draft.scheduledTime);
+                setScheduledTimezone(draft.scheduledTimezone);
+                setScheduledDateTime(draft.scheduledDateTime ? new Date(draft.scheduledDateTime) : undefined);
+                const media = draft.media as (MediaFileItem & { name: string; uploaded: UploadedMediaItem })[];
+                setMediaFiles(media.map(({ id, type, dimensions }) => ({ id, type, dimensions })));
+                setMediaPreviews(media.map(item => ({ id: item.id, type: item.type, name: item.name, url: item.uploaded.mediaUrl })));
+                setUploadedMedia(new Map(media.map(item => [item.id, item.uploaded])));
+                importedUrls.current = new Set(media.filter(item => item.uploaded.imported).map(item => item.uploaded.mediaUrl));
+                mediaIdCounterRef.current = Math.max(-1, ...media.map(item => item.id)) + 1;
+                sessionStorage.removeItem("amplypost:canva-composer-draft");
+            }
+            const url = new URL(window.location.href);
+            if (url.searchParams.get("canvaPicker") === "open") {
+                url.searchParams.delete("canvaPicker");
+                window.history.replaceState(window.history.state, "", url);
+                void canvaRequest<CanvaStatus>("/status").then(status => {
+                    if (status.connected && status.capabilities?.browseDesigns) {
+                        setCanvaExportAllowed(status.capabilities.exportDesigns); setShowCanvaPicker(true);
+                    }
+                }).catch(error => setUploadError(error.message));
+            }
+        } catch { setUploadError("Unable to restore the saved post draft."); }
+    }, [isLoadingAccounts]);
+
+    function addCanvaMedia(media: CanvaMedia[]) {
+        const fresh = media.filter(item => !importedUrls.current.has(item.mediaUrl));
+        const entries = fresh.map(item => {
+            const id = mediaIdCounterRef.current++;
+            const dimensions = item.width && item.height ? { width: item.width, height: item.height } : undefined;
+            return { id, item, dimensions };
+        });
+        entries.forEach(({ item }) => importedUrls.current.add(item.mediaUrl));
+        setMediaFiles(previous => [...previous, ...entries.map(({ id, item, dimensions }) => ({ id, type: item.mediaType, dimensions }))]);
+        setMediaPreviews(previous => [...previous, ...entries.map(({ id, item }) => ({ id, type: item.mediaType, url: item.mediaUrl, name: `Canva design ${id + 1}` }))]);
+        setUploadedMedia(previous => {
+            const next = new Map(previous);
+            entries.forEach(({ id, item, dimensions }) => next.set(id, { ...item, dimensions, imported: item }));
+            return next;
+        });
+    }
 
     const fetchAccounts = useCallback(async () => {
         try {
@@ -661,6 +736,8 @@ export default function ShortVideoClient() {
     const getAccountCaption = (accountId: string) => accountCaptions[accountId] ?? "";
 
     const uploadSingleFile = async (media: MediaFileItem) => {
+        const file = media.file;
+        if (!file) return;
         const abortController = new AbortController();
         abortControllersRef.current.set(media.id, abortController);
 
@@ -668,8 +745,8 @@ export default function ShortVideoClient() {
         setUploadError(null);
 
         try {
-            const fileName = renameFileWithTimestamp(media.file);
-            const contentType = getMediaContentType(media.file);
+            const fileName = renameFileWithTimestamp(file);
+            const contentType = getMediaContentType(file);
             const response = await fetch("/api/uploads", {
                 method: 'POST',
                 headers: {
@@ -723,7 +800,7 @@ export default function ShortVideoClient() {
                     xhr.abort();
                 });
 
-                xhr.send(media.file);
+                xhr.send(file);
             });
 
             setUploadedMedia((prev) => {
@@ -732,7 +809,7 @@ export default function ShortVideoClient() {
                     key,
                     mediaUrl: publicUrl,
                     mediaType: media.type,
-                    size: media.file.size,
+                    size: file.size,
                     dimensions: media.dimensions,
                 });
                 return next;
@@ -792,11 +869,6 @@ export default function ShortVideoClient() {
             const type: MediaKind = isImage ? 'image' : 'video';
             const dimensions = await (type === "image" ? getImageDimensions(file) : getVideoDimensions(file))
                 .catch(() => undefined);
-
-            if (type === "image" && !dimensions) {
-                alert(`${file.name}: Unable to read image dimensions. Please try a JPEG, PNG, GIF, or WebP image.`);
-                return null;
-            }
 
             return { id, file, type, dimensions };
         }));
@@ -903,7 +975,7 @@ export default function ShortVideoClient() {
         try {
             const uploaded = uploadedMedia.get(mediaPendingRemoval.id);
 
-            if (uploaded) {
+            if (uploaded && !uploaded.imported) {
                 const response = await fetch("/api/uploads", {
                     method: 'DELETE',
                     headers: {
@@ -951,6 +1023,7 @@ export default function ShortVideoClient() {
     };
 
     const resetComposerForm = () => {
+        sessionStorage.removeItem("amplypost:canva-composer-draft");
         setCaption('');
         setAccountCaptions({});
         setPlatformCaptions({});
@@ -1147,12 +1220,13 @@ export default function ShortVideoClient() {
                 media: mediaFiles
                     .map((media) => uploadedMedia.get(media.id))
                     .filter((media): media is UploadedMediaItem => Boolean(media))
-                    .map(({ mediaUrl, mediaType, dimensions, size }) => ({
+                    .map(({ mediaUrl, mediaType, dimensions, size, imported }) => imported ?? ({
                         mediaUrl,
                         mediaType,
                         ...(mediaType === "image" ? {
-                            width: dimensions!.width,
-                            height: dimensions!.height,
+                            // JSON omits undefined dimensions when the browser cannot decode an image.
+                            width: dimensions?.width,
+                            height: dimensions?.height,
                             size,
                         } : {}),
                     })),
@@ -1268,6 +1342,9 @@ export default function ShortVideoClient() {
                         </Button>
                         <p className="mt-4 text-xs text-muted-foreground">JPEG, PNG, GIF, WebP, HEIC, HEIF, MP4, MOV, AVI or WebM • Max 500MB each</p>
                     </div>
+
+                    <CanvaConnection beforeConnect={persistCanvaDraft} disabled={isPublishing || isUploadingMedia} onBrowse={(canExport) => { setCanvaExportAllowed(canExport); setShowCanvaPicker(true); }} />
+                    {showCanvaPicker && <CanvaPicker canExport={canvaExportAllowed} beforeConnect={persistCanvaDraft} onClose={() => setShowCanvaPicker(false)} onAdd={addCanvaMedia} />}
 
                     {mediaPreviews.length > 0 && (
                         <div className="rounded-xl border border-border bg-card p-3 shadow-sm">

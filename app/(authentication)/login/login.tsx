@@ -87,7 +87,7 @@ export default function LoginForm() {
                 body: JSON.stringify({
                     provider: "google",
                     callbackURL: `${window.location.origin}/dashboard`,
-                    newUserCallbackURL: `${window.location.origin}/dashboard`,
+                    newUserCallbackURL: `${window.location.origin}/dashboard?registration=complete`,
                     errorCallbackURL: `${window.location.origin}/login`,
                 }),
             });

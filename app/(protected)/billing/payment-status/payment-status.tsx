@@ -5,12 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, ArrowRight, CheckCircle2, CreditCard, Loader2, Mail } from "lucide-react";
 import { invalidateCachedResource } from "@/lib/client-cache";
+import { trackConfirmedSubscription, type TrackedSubscription } from "@/lib/tiktok";
+import { authFetch } from "@/util/backend-api";
 import { apiFetch } from "@/util/backend-api";
 
-type Subscription = {
-    status?: string;
-    hasAccess?: boolean;
-};
+type Subscription = TrackedSubscription;
 
 type PageState = "loading" | "success" | "pending" | "failed";
 
@@ -35,12 +34,14 @@ async function fetchCurrentSubscription() {
     return json?.data ?? null;
 }
 
-async function waitForSubscription(signal: AbortSignal) {
+async function waitForSubscription(signal: AbortSignal, subscriptionId: string | null, failed: boolean) {
     for (let attempt = 0; attempt < POLL_ATTEMPTS; attempt += 1) {
         if (signal.aborted) return null;
 
         const subscription = await fetchCurrentSubscription();
-        if (subscription?.hasAccess) {
+        const matchesCheckout = !subscriptionId || subscription?.dodoSubscriptionId === subscriptionId;
+        const paymentConfirmed = subscription?.confirmedPayment?.status === "succeeded";
+        if (!failed && matchesCheckout && subscription?.hasAccess && (subscription.isTrialing || paymentConfirmed)) {
             return subscription;
         }
 
@@ -75,10 +76,18 @@ export function PaymentStatus() {
         setIsCheckingAgain(isManualRetry);
 
         try {
-            const subscription = await waitForSubscription(controller.signal);
+            const subscription = await waitForSubscription(controller.signal, subscriptionId, FAILED_RETURN_STATUSES.has(statusParam));
             if (controller.signal.aborted) return;
 
             if (subscription?.hasAccess) {
+                if (!FAILED_RETURN_STATUSES.has(statusParam)) {
+                    void authFetch("auth/get-session", { cache: "no-store" })
+                        .then(async (response) => {
+                            if (!response.ok) return;
+                            const session = await response.json();
+                            if (session?.user?.id) await trackConfirmedSubscription(subscription, session.user, subscriptionId);
+                        }).catch(() => {});
+                }
                 invalidateCachedResource("billing:");
                 setPageState("success");
                 redirectTimeoutRef.current = setTimeout(() => {
@@ -103,7 +112,7 @@ export function PaymentStatus() {
                 setIsCheckingAgain(false);
             }
         }
-    }, [router, statusParam]);
+    }, [router, statusParam, subscriptionId]);
 
     useEffect(() => {
         void confirmSubscription();

@@ -217,6 +217,86 @@ const sections = [
             </div>
         ),
     },
+
+    {
+        number: "11",
+        id: "canva-data",
+        title: "Canva Integration and Customer Data",
+        body: (
+            <div className="space-y-6">
+                <p>
+                    When you connect Canva, Amplypost uses the permissions you grant to display
+                    your available designs and, where authorized, your Canva display name.
+                    Design information may include design IDs, titles, thumbnails, page counts,
+                    editor links, and supported export formats. When you choose to add a design,
+                    we export the selected pages in your chosen format and import the resulting
+                    images or videos for use in your Amplypost posts.
+                </p>
+                <div id="canva-data-retention" className="scroll-mt-24 space-y-3">
+                    <h3 className="text-lg font-semibold text-foreground">Data retention policy</h3>
+                    <p>
+                        We retain your Canva connection details and encrypted authorization
+                        tokens while your account remains connected, so you can browse and
+                        import designs without reconnecting each time. We store export records,
+                        including design IDs, formats, and references to imported media, to
+                        process your selections and avoid duplicate imports when you retry.
+                    </p>
+                    <p>
+                        Imported images and videos are stored separately from your Canva
+                        connection for use in drafts, scheduled posts, and published content.
+                        Disconnecting Canva does not automatically remove these files or
+                        content you have already added to Amplypost.
+                    </p>
+                </div>
+                <div id="canva-data-removal" className="scroll-mt-24 space-y-3">
+                    <h3 className="text-lg font-semibold text-foreground">Data archival and removal policy</h3>
+                    <p>
+                        You can disconnect Canva from your connected accounts in Amplypost.
+                        On successful disconnection, we remove the stored Canva connection,
+                        access and refresh tokens, and associated export records. This ends
+                        Amplypost&apos;s access through that connection. Removing an Amplypost
+                        user account also removes its associated Canva connection and export
+                        records from our database.
+                    </p>
+                    <p>
+                        To request removal of imported Canva media or other customer data,
+                        contact <a href="mailto:support@amplypost.com" className="font-medium text-primary underline-offset-4 hover:underline">support@amplypost.com</a>.
+                        We verify requests before processing them to protect your account.
+                        Please identify whether you want to remove your Canva connection,
+                        imported files, or your Amplypost account. Any data that must be
+                        retained for legal or security reasons is subject to those obligations.
+                    </p>
+                    <p>
+                        Disconnecting Canva or removing data from Amplypost does not delete
+                        your original Canva designs or posts already published to social media.
+                        Those copies must be managed on the relevant platform. Copies cached
+                        or downloaded outside Amplypost may remain available independently.
+                    </p>
+                </div>
+                <div id="canva-data-storage" className="scroll-mt-24 space-y-3">
+                    <h3 className="text-lg font-semibold text-foreground">Data storage policy</h3>
+                    <p>
+                        Canva connection and export records are stored in our server-side
+                        database and associated with your Amplypost account. Canva access and
+                        refresh tokens are encrypted using AES-256-GCM before database storage.
+                        The encryption key is supplied through server configuration separately
+                        from the stored token values. Canva API requests and export downloads
+                        use HTTPS, and integration requests require an authenticated Amplypost
+                        session.
+                    </p>
+                    <p>
+                        Imported images and videos are stored in Cloudflare R2 object storage
+                        and served through Amplypost&apos;s media URLs for previews and publishing.
+                        These media URLs are accessible to anyone who has the link. Files may
+                        also be held temporarily on our server while an import is processed;
+                        unsuccessful imports can leave temporary files pending cleanup.
+                        Canva tokens are handled by the backend and are not returned to the
+                        asset picker.
+                    </p>
+                </div>
+            </div>
+        ),
+    },
 ];
 
 export default function PrivacyPolicy() {
@@ -244,7 +324,7 @@ export default function PrivacyPolicy() {
                     </h1>
                     <p className="mt-4 text-lg text-muted-foreground">for Amplypost</p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                        Last Updated: December 2, 2025
+                        Last Updated: September 11, 2026
                     </p>
                 </div>
 

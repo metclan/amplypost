@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowRight, Check, Zap } from "lucide-react";
+import { trackTikTok } from "@/lib/tiktok";
 import { apiFetch } from "@/util/backend-api";
 
 interface PlanFeatures {
@@ -135,6 +136,7 @@ export default function Pricing() {
 
                 if (!ignore) {
                     setPlans(activePlans);
+                    if (activePlans.length) void trackTikTok("ViewContent");
                 }
             } catch (fetchError) {
                 console.error("Failed to load pricing plans:", fetchError);

@@ -41,6 +41,7 @@ type Post = {
     createdAt: string;
     updatedAt: string | null;
     accountName: string | null;
+    profilePicture: string | null;
     caption: string;
     postUrl: string | null;
     imageUrls: string[];
@@ -154,6 +155,7 @@ function getMediaUrls(raw: RawPost, mediaType: "image" | "video") {
 }
 
 function normalizePost(raw: RawPost): Post {
+    const account = isRawRecord(raw.socialMediaAccount) ? raw.socialMediaAccount : {};
     const imageUrlStrings = getStringArray(raw, "imageUrls") ?? getStringArray(raw, "image_urls") ?? [];
     const videoUrlStrings = getStringArray(raw, "videoUrls") ?? getStringArray(raw, "video_urls") ?? [];
 
@@ -171,7 +173,8 @@ function normalizePost(raw: RawPost): Post {
         failedAt: getString(raw, "failedAt") ?? getString(raw, "failed_at") ?? null,
         createdAt: getString(raw, "createdAt") ?? getString(raw, "created_at") ?? new Date().toISOString(),
         updatedAt: getString(raw, "updatedAt") ?? getString(raw, "updated_at") ?? null,
-        accountName: getString(raw, "accountName") ?? getString(raw, "account_name") ?? null,
+        accountName: getString(account, "accountName") ?? getString(raw, "accountName") ?? getString(raw, "account_name") ?? null,
+        profilePicture: getString(account, "profilePicture") ?? getString(raw, "profilePicture") ?? null,
         caption: getString(raw, "caption") ?? "",
         postUrl: getString(raw, "postUrl") ?? getString(raw, "post_url") ?? null,
         imageUrls: imageUrlStrings.length > 0 ? imageUrlStrings : getMediaUrls(raw, "image"),
@@ -367,6 +370,7 @@ function toCalendarPost(post: Post): CalendarPost {
         attemptCount: post.attemptCount ?? undefined,
         lastError: post.lastError,
         accountName: post.accountName,
+        profilePicture: post.profilePicture,
         caption: post.caption,
         imageUrls: post.imageUrls,
         videoUrls: post.videoUrls,
