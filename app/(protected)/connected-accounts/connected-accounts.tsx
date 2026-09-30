@@ -393,6 +393,11 @@ export default function ConnectedAccounts() {
                                         >
                                             {!needsAttention ? "Active" : "Needs attention"}
                                         </span>
+                                        {account.provider === "tiktok" && (
+                                            <Button asChild variant="outline">
+                                                <Link href={`/analytics/tiktok?account=${encodeURIComponent(account.id)}`}>Analytics</Link>
+                                            </Button>
+                                        )}
                                         {needsAttention && platform && (
                                             <Button
                                                 type="button"

@@ -125,6 +125,7 @@ export default function DashboardClient() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                    <Link href="/analytics" className="rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-accent">View analytics</Link>
                     <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-1">
                         <button
                             type="button"

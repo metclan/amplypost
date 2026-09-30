@@ -7,11 +7,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { authFetch } from "@/util/backend-api";
 import {
   LayoutDashboard,
+  BarChart3,
   CalendarDays,
   ClipboardList,
   PenLine,
   Link2,
   CreditCard,
+  Settings,
   BriefcaseBusiness,
   Headphones,
   LogOut,
@@ -25,12 +27,14 @@ import WorkspaceSwitcher from "./workspace-switcher";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Create Post", href: "/create-post", icon: PenLine },
   { name: "Posts", href: "/posts", icon: ClipboardList },
   { name: "Calendar", href: "/calendar", icon: CalendarDays },
   { name: "Connected Accounts", href: "/connected-accounts", icon: Link2 },
   { name: "Workspaces", href: "/workspaces", icon: BriefcaseBusiness },
   { name: "Billing", href: "/billing", icon: CreditCard },
+  { name: "Settings", href: "/settings", icon: Settings },
 ];
 
 type ProtectedSidebarProps = {

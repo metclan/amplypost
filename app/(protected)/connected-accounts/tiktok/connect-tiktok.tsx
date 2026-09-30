@@ -79,7 +79,8 @@ function StatusPanel({ state, title, message, details }: StatusPanelProps) {
                     </div>
                 </div>
 
-                <div className="flex justify-end pt-6">
+                <div className="flex flex-wrap justify-end gap-3 pt-6">
+                    {isSuccess && <Button asChild variant="outline"><Link href="/analytics">View analytics</Link></Button>}
                     <Button asChild className={isSuccess ? "bg-green-600 text-white hover:bg-green-700" : undefined}>
                         <Link href="/connected-accounts">Back to Connected Accounts</Link>
                     </Button>

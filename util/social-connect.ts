@@ -52,6 +52,8 @@ export const connectInstagram = () => {
 export const connectTiktok = () => {
     const scope = [
         'user.info.basic',
+        'user.info.stats',
+        'video.list',
         'video.upload',
         'video.publish',
         'user.info.profile'
