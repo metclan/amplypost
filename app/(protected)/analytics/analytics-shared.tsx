@@ -15,7 +15,7 @@ export function Loading({ label }: { label: string }) {
 export function RequestError({ error, retry }: { error: Error; retry: () => void }) {
     const code = error instanceof AnalyticsRequestError ? error.code : undefined;
     return <div role="alert" className="space-y-3 rounded-xl border border-border bg-muted/30 p-5">
-        <p className="text-sm text-foreground">{code === "RECONNECT_REQUIRED" ? "Reconnect this account and allow access to insights to see analytics." : error.message}</p>
+        <p className="text-sm text-foreground">{error.message}</p>
         {code === "RECONNECT_REQUIRED" ? <Button asChild><Link href="/connected-accounts">Reconnect account</Link></Button> :
             code === "ACCOUNT_NOT_FOUND" ? <Button asChild variant="outline"><Link href="/connected-accounts">Manage accounts</Link></Button> :
             <Button variant="outline" onClick={retry}>Try again</Button>}

@@ -13,7 +13,7 @@ export type AnalyticsResponse = {
     payload: {
         schemaVersion: number;
         period: string;
-        scope?: "account" | "board";
+        scope?: "account" | "board" | "location";
         metrics?: Metrics;
         summary?: Metrics;
         since?: string;
@@ -42,6 +42,21 @@ export const analyticsProviders: Record<string, {
     accountMetrics: { key: string; label: string }[];
     postMetrics: { key: string; label: string }[];
 }> = {
+    google_business_profile: {
+        name: "Google Business Profile",
+        accountMetrics: [
+            { key: "BUSINESS_IMPRESSIONS_DESKTOP_SEARCH", label: "Search impressions · desktop" },
+            { key: "BUSINESS_IMPRESSIONS_MOBILE_SEARCH", label: "Search impressions · mobile" },
+            { key: "BUSINESS_IMPRESSIONS_DESKTOP_MAPS", label: "Maps impressions · desktop" },
+            { key: "BUSINESS_IMPRESSIONS_MOBILE_MAPS", label: "Maps impressions · mobile" },
+            { key: "WEBSITE_CLICKS", label: "Website clicks" },
+            { key: "CALL_CLICKS", label: "Call-button clicks" },
+            { key: "BUSINESS_DIRECTION_REQUESTS", label: "Direction requests" },
+            { key: "BUSINESS_BOOKINGS", label: "Bookings" },
+            { key: "BUSINESS_FOOD_MENU_CLICKS", label: "Menu clicks" },
+        ],
+        postMetrics: [],
+    },
     pinterest: {
         name: "Pinterest",
         accountMetrics: [
@@ -126,7 +141,7 @@ export async function fetchAnalytics(accountId: string, resource: AnalyticsResou
     const response = await apiFetch(`${path}${params.size ? `?${params}` : ""}`, { signal, cache: "no-store" });
     if (!response.ok) {
         const body = await response.clone().json().catch(() => null);
-        if (["RECONNECT_REQUIRED", "UNSUPPORTED_PROVIDER", "ACCOUNT_NOT_FOUND", "ANALYTICS_ACCESS_DENIED"].includes(body?.code)) {
+        if (["RECONNECT_REQUIRED", "UNSUPPORTED_PROVIDER", "ACCOUNT_NOT_FOUND", "ANALYTICS_ACCESS_DENIED", "SANDBOX_ANALYTICS_UNAVAILABLE", "ANALYTICS_SETUP_REQUIRED", "LOCATION_NOT_FOUND", "RATE_LIMITED"].includes(body?.code)) {
             throw new AnalyticsRequestError(body.message, body.code);
         }
         await parseApiErrorResponse(response, "We couldn’t load analytics. Please try again.");

@@ -3,10 +3,11 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { BarChart3, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { fetchAccounts, getPlatformLogo, type ConnectedAccount } from "@/lib/client-data";
+import { useWorkspace } from "@/app/components/workspace-provider";
+import { accountBelongsToWorkspace } from "@/lib/workspaces";
 import { Loading, RequestError } from "./analytics-shared";
 
 const AnalyticsAccountContext = createContext<ConnectedAccount | null>(null);
@@ -30,35 +31,33 @@ export default function AnalyticsShell({ children }: { children: ReactNode }) {
     const [accounts, setAccounts] = useState<ConnectedAccount[]>();
     const [error, setError] = useState<Error>();
     const [attempt, setAttempt] = useState(0);
+    const { selectedWorkspace } = useWorkspace();
+    const visibleAccounts = accounts?.filter(account => accountBelongsToWorkspace(account.id, selectedWorkspace));
     const pathname = usePathname();
     const query = useSearchParams();
-    const router = useRouter();
     const platform = pathname.split("/")[2];
     const requestedId = query.get("account");
-    const selected = accounts?.find(account => account.id === requestedId && (!platform || account.provider === platform))
-        ?? accounts?.find(account => account.provider === (platform || "tiktok"))
-        ?? (!platform ? accounts?.[0] : undefined);
+    const selected = visibleAccounts?.find(account => account.id === requestedId && (!platform || account.provider === platform))
+        ?? visibleAccounts?.find(account => account.provider === (platform || "tiktok"))
+        ?? (!platform ? visibleAccounts?.[0] : undefined);
     useEffect(() => {
         let current = true;
         fetchAccounts().then(result => { if (current) { setAccounts(result); setError(undefined); } })
             .catch(error => { if (current) setError(error instanceof Error ? error : new Error("Unable to load accounts.")); });
         return () => { current = false; };
     }, [attempt]);
-    useEffect(() => {
-        if (!platform && selected) router.replace(`/analytics/${selected.provider}?account=${encodeURIComponent(selected.id)}`);
-    }, [platform, selected, router]);
 
     return <div className="space-y-5">
         <header><h1 className="text-3xl font-bold tracking-tight">Analytics</h1><p className="mt-2 text-sm text-muted-foreground">Your audience, your content, and what’s getting noticed.</p></header>
-        {error ? <RequestError error={error} retry={() => { setError(undefined); setAttempt(value => value + 1); }} /> : !accounts ? <Loading label="Loading connected accounts…" /> : accounts.length === 0 ?
-            <div className="space-y-4 rounded-2xl border border-dashed border-border p-10 text-center"><BarChart3 className="mx-auto h-10 w-10 text-muted-foreground" aria-hidden="true" /><h2 className="text-base font-semibold">See how your content performs</h2><p className="text-sm text-muted-foreground">Connect a TikTok, Instagram, Facebook, Threads, or Pinterest account to get started.</p><Button asChild><Link href="/connected-accounts">Connect an account</Link></Button></div> : <>
+        {error ? <RequestError error={error} retry={() => { setError(undefined); setAttempt(value => value + 1); }} /> : !accounts ? <Loading label="Loading connected accounts…" /> : <>
                 <nav aria-label="Social media accounts" className="border-b border-border pb-1">
                     <div className="flex items-start gap-2 overflow-x-auto px-1 pb-2 pt-1 sm:gap-3">
-                        {accounts.map(account => <AccountCircle key={account.id} account={account} selected={account.id === selected?.id} />)}
+                        <Link href="/analytics" aria-current={!platform ? "page" : undefined} className="flex w-20 shrink-0 flex-col items-center gap-2 py-1"><span className={`flex h-14 w-14 items-center justify-center rounded-full bg-muted sm:h-16 sm:w-16 ${!platform ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : "ring-1 ring-border"}`}><BarChart3 className="h-6 w-6" aria-hidden="true" /></span><span className="text-xs font-medium">Overview</span></Link>
+                        {visibleAccounts?.map(account => <AccountCircle key={account.id} account={account} selected={Boolean(platform) && account.id === selected?.id} />)}
                         <Link href="/connected-accounts" className="flex w-20 shrink-0 flex-col items-center gap-2 py-1 text-muted-foreground hover:text-foreground"><span className="flex h-14 w-14 items-center justify-center rounded-full border border-dashed border-border sm:h-16 sm:w-16"><Plus className="h-5 w-5" aria-hidden="true" /></span><span className="text-xs">Add account</span></Link>
                     </div>
                 </nav>
-                {!platform ? <Loading label="Opening analytics…" /> : selected ? <AnalyticsAccountContext.Provider value={selected}><div key={selected.id}>{children}</div></AnalyticsAccountContext.Provider> :
+                {!platform ? children : selected ? <AnalyticsAccountContext.Provider value={selected}><div key={selected.id}>{children}</div></AnalyticsAccountContext.Provider> :
                     <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">Select an account above to view its analytics.</div>}
             </>}
     </div>;
