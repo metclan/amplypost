@@ -60,14 +60,14 @@ export default function TikTokMonthChart({ items, month }: { items: AnalyticsPos
         <div className="flex flex-wrap items-start justify-between gap-4 px-5 pt-5 sm:px-6">
             <div><h3 className="text-lg font-semibold">Video performance</h3><p className="mt-1 text-xs text-muted-foreground">{monthLabel(month)} · {items.length} public {items.length === 1 ? "video" : "videos"}</p></div>
             <div role="group" aria-label="Chart metric" className="flex flex-wrap gap-1 rounded-lg bg-muted/60 p-1">
-                {analyticsProviders.tiktok.postMetrics.map(item => <button key={item.key} type="button" aria-pressed={item.key === metricKey} onClick={() => { setMetricKey(item.key); setActiveId(undefined); }} className={`rounded-md px-3 py-1.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-primary ${item.key === metricKey ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{item.label}</button>)}
+                {analyticsProviders.tiktok.postMetrics.map(item => <button key={item.key} type="button" aria-pressed={item.key === metricKey} onClick={() => { setMetricKey(item.key); setActiveId(undefined); }} className={`cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-primary ${item.key === metricKey ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{item.label}</button>)}
             </div>
         </div>
         <div className="px-3 pb-3 pt-5 sm:px-5">
             <div ref={container} className="relative" onPointerLeave={event => { if (event.pointerType === "mouse") setActiveId(undefined); }}>
                 <svg width="100%" height="290" viewBox={`0 0 ${width} 290`} role="img" tabIndex={known.length ? 0 : undefined}
                     aria-label={`${metric.label} for videos published in ${monthLabel(month)}. Each point is a video’s current lifetime total. Use arrow keys to explore videos.`}
-                    className="overflow-visible rounded-lg text-muted-foreground outline-offset-2 focus-visible:outline-2 focus-visible:outline-primary"
+                    className="cursor-pointer overflow-visible rounded-lg text-muted-foreground outline-offset-2 focus-visible:outline-2 focus-visible:outline-primary"
                     onPointerMove={selectNearest} onPointerDown={selectNearest} onFocus={() => setActiveId(value => value ?? peak?.externalId)} onBlur={() => setActiveId(undefined)}
                     onKeyDown={event => {
                         if (event.key === "Escape") { setActiveId(undefined); return; }
@@ -80,11 +80,13 @@ export default function TikTokMonthChart({ items, month }: { items: AnalyticsPos
                     <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--primary)" stopOpacity="0.18" /><stop offset="100%" stopColor="var(--primary)" stopOpacity="0.01" /></linearGradient></defs>
                     {[0, 1, 2, 3, 4].map(tick => { const py = bottom - tick / 4 * (bottom - top); return <g key={tick} aria-hidden="true"><line x1={left} x2={right} y1={py} y2={py} stroke="currentColor" strokeOpacity="0.16" strokeDasharray="3 5" /><text x={left - 10} y={py + 4} textAnchor="end" fill="currentColor" fontSize="10">{compact.format(step * tick)}</text></g>; })}
                     {ticks.map(day => <text key={day} aria-hidden="true" x={left + (day - 1) / days * (right - left)} y="278" fill="currentColor" textAnchor="middle" fontSize="11">{day}</text>)}
+                    <g key={`${month}:${metricKey}`} className="metric-animation">
                     {segments.map((posts, index) => {
                         const line = posts.map((post, i) => `${i === 0 ? "M" : "L"} ${x(post)} ${y(post)}`).join(" ");
                         return <g key={index} aria-hidden="true"><path d={`${line} L ${x(posts[posts.length - 1])} ${bottom} L ${x(posts[0])} ${bottom} Z`} fill={`url(#${gradientId})`} /><path d={line} fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinejoin="round" /></g>;
                     })}
                     {known.map(post => <circle key={post.externalId} cx={x(post)} cy={y(post)} r={post.externalId === activeId ? 5 : 3.5} fill="var(--primary)" stroke="var(--card)" strokeWidth="2" aria-hidden="true" />)}
+                    </g>
                     {active && <line x1={x(active)} x2={x(active)} y1={top} y2={bottom} stroke="var(--primary)" strokeOpacity="0.4" strokeDasharray="4 4" aria-hidden="true" />}
                 </svg>
                 {!known.length && <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-10 text-center"><p className="rounded-lg bg-card/95 p-4 text-sm text-muted-foreground">{items.length ? `${metric.label} aren’t available for these videos.` : "No public videos were published this month."}</p></div>}
@@ -99,5 +101,18 @@ export default function TikTokMonthChart({ items, month }: { items: AnalyticsPos
             <div className="min-w-0 flex-1"><p className="text-xs text-muted-foreground">Top video in {monthLabel(month)} by {metric.label.toLowerCase()}</p><p className="mt-1 truncate text-sm font-medium" title={title(peak)}>{title(peak)}</p>{safeWebUrl(peak.metadata.share_url) && <a href={safeWebUrl(peak.metadata.share_url)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline">View on TikTok<ExternalLink className="h-3 w-3" aria-hidden="true" /><span className="sr-only"> (opens in a new tab)</span></a>}</div>
             <p className="text-right text-xl font-semibold tabular-nums">{formatMetric(peak.metrics[metricKey])}<span className="mt-1 block text-xs font-normal text-muted-foreground">Lifetime {metric.label.toLowerCase()}</span></p>
         </div>}
+        <style jsx>{`
+            .metric-animation {
+                transform-origin: 0 252px;
+                animation: metric-enter 500ms ease-out;
+            }
+            @keyframes metric-enter {
+                from { opacity: 0; transform: scaleY(0.1); }
+                to { opacity: 1; transform: scaleY(1); }
+            }
+            @media (prefers-reduced-motion: reduce) {
+                .metric-animation { animation: none; }
+            }
+        `}</style>
     </section>;
 }

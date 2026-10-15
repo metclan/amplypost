@@ -203,6 +203,14 @@ export default function ShortVideoClient() {
     const [tikTokConfigs, setTikTokConfigs] = useState<Record<string, TikTokConfigState>>({});
     const [youTubeConfigs, setYouTubeConfigs] = useState<Record<string, YouTubeConfigState>>({});
 
+    const [videoCover, setVideoCover] = useState<{ videoId: number; file: File } | null>(null);
+    const [coverPreview, setCoverPreview] = useState<string | null>(null);
+    useEffect(() => {
+        if (!videoCover) { setCoverPreview(null); return; }
+        const url = URL.createObjectURL(videoCover.file);
+        setCoverPreview(url);
+        return () => URL.revokeObjectURL(url);
+    }, [videoCover]);
     const [mediaFiles, setMediaFiles] = useState<MediaFileItem[]>([]);
     const [mediaPreviews, setMediaPreviews] = useState<MediaPreviewItem[]>([]);
     const [uploadedMedia, setUploadedMedia] = useState<Map<number, UploadedMediaItem>>(new Map());
@@ -493,8 +501,12 @@ export default function ShortVideoClient() {
         hasMultipleVideos && ["facebook", "tiktok", "linkedin"].includes(provider.toLowerCase());
     const isDisabledForYouTube = (provider: string) =>
         provider.toLowerCase() === "youtube" && isInvalidForYouTube;
+    const isInvalidForPinterest = selectedImageCount > 5 ||
+        (selectedVideoCount > 0 && mediaFiles.length !== 1);
+    const isDisabledForPinterest = (provider: string) =>
+        provider.toLowerCase() === "pinterest" && isInvalidForPinterest;
     const isAccountDisabledByMedia = (provider: string) =>
-        isDisabledForMultipleVideos(provider) || isDisabledForYouTube(provider);
+        isDisabledForMultipleVideos(provider) || isDisabledForYouTube(provider) || isDisabledForPinterest(provider);
     const disabledAccountIds = accounts
         .filter((account) => isAccountDisabledByMedia(account.provider))
         .map((account) => account.id);
@@ -538,7 +550,7 @@ export default function ShortVideoClient() {
     }, [canPostAsStory, selectedAccountsAreStoryOnlyEligible, storyPublishMode]);
 
     useEffect(() => {
-        if (!hasMultipleVideos && !isInvalidForYouTube) return;
+        if (!hasMultipleVideos && !isInvalidForYouTube && !isInvalidForPinterest) return;
 
         setSelectedAccounts((prev) =>
             prev.filter((accountId) => {
@@ -546,7 +558,7 @@ export default function ShortVideoClient() {
                 return account ? !isAccountDisabledByMedia(account.provider) : true;
             })
         );
-    }, [accounts, hasMultipleVideos, isInvalidForYouTube]);
+    }, [accounts, hasMultipleVideos, isInvalidForYouTube, isInvalidForPinterest]);
 
     useEffect(() => {
         if (!canUseDifferentCaptions && captionMode !== "same") {
@@ -1011,6 +1023,7 @@ export default function ShortVideoClient() {
         abortControllersRef.current.forEach((controller) => controller.abort());
         abortControllersRef.current.clear();
         mediaPreviews.forEach((preview) => URL.revokeObjectURL(preview.url));
+        setVideoCover(null);
         setMediaFiles([]);
         setMediaPreviews([]);
         setUploadedMedia(new Map());
@@ -1174,6 +1187,22 @@ export default function ShortVideoClient() {
         setShowTikTokModal(false);
 
         try {
+            let coverImageUrl: string | undefined;
+            if (mediaFiles.length === 1 && mediaFiles[0].type === "video" &&
+                videoCover?.videoId === mediaFiles[0].id &&
+                selectedAccountObjects.some(account => account.provider === "pinterest")) {
+                const file = videoCover.file;
+                const contentType = getMediaContentType(file);
+                const signed = await fetch("/api/uploads", {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ filename: renameFileWithTimestamp(file), contentType }),
+                });
+                if (!signed.ok) await parseApiErrorResponse(signed, "Unable to prepare cover upload");
+                const { uploadUrl, publicUrl } = await signed.json();
+                const uploaded = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": contentType }, body: file });
+                if (!uploaded.ok) throw new Error("Unable to upload video cover. Please try again.");
+                coverImageUrl = publicUrl;
+            }
             // Get selected account details
             const selectedAccountsData = accounts
                 .filter(account => selectedAccounts.includes(account.id))
@@ -1188,7 +1217,9 @@ export default function ShortVideoClient() {
                             ? (youTubeConfigs[account.id] ?? getDefaultYouTubeConfig(account.id))
                             : account.provider === 'bluesky'
                                 ? getDefaultBlueskyConfig()
-                                : undefined,
+                                : account.provider === 'pinterest' && coverImageUrl
+                                    ? { coverImageUrl }
+                                    : undefined,
                 }));
 
             // Handle scheduling
@@ -1410,6 +1441,35 @@ export default function ShortVideoClient() {
                         </div>
                     )}
 
+                    {mediaFiles.length === 1 && mediaFiles[0].type === "video" && (
+                        <div className="mt-4 space-y-2 rounded-xl border border-border p-4">
+                            <label className="block text-sm font-medium">
+                                Video cover image (optional)
+                                <input type="file" accept="image/jpeg,image/png,image/webp" disabled={isPublishing}
+                                    className="mt-2 block w-full text-sm"
+                                    onChange={(event) => {
+                                        const file = event.target.files?.[0];
+                                        if (!file) return;
+                                        if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 10 * 1024 * 1024) {
+                                            setUploadError("Choose a JPEG, PNG, or WebP cover under 10 MiB.");
+                                        } else {
+                                            setVideoCover({ videoId: mediaFiles[0].id, file });
+                                            setUploadError(null);
+                                        }
+                                        event.target.value = "";
+                                    }} />
+                            </label>
+                            <p className="text-xs text-muted-foreground">Used for Pinterest. Leave empty to generate a cover from your video.</p>
+                            {videoCover?.videoId === mediaFiles[0].id && coverPreview && (
+                                <div className="flex items-center gap-3">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={coverPreview} alt="Video cover preview" className="h-24 w-24 rounded-lg object-cover" />
+                                    <button type="button" disabled={isPublishing} onClick={() => setVideoCover(null)} className="text-sm underline">Remove cover</button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {uploadError && (
                         <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
                             <div className="rounded-lg border border-red-500/25 bg-red-500/10 p-3">
@@ -1440,6 +1500,9 @@ export default function ShortVideoClient() {
                                 maxVisibleAccounts={4}
                                 disabledAccountIds={disabledAccountIds}
                                 getDisabledReason={(account) => {
+                                    if (isDisabledForPinterest(account.provider)) {
+                                        return "Pinterest supports up to 5 images or one video. Images and videos cannot be mixed.";
+                                    }
                                     if (isDisabledForYouTube(account.provider)) {
                                         return "YouTube requires exactly one video and does not support images.";
                                     }

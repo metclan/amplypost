@@ -13,7 +13,13 @@ export type AnalyticsResponse = {
     payload: {
         schemaVersion: number;
         period: string;
+        scope?: "account" | "board";
         metrics?: Metrics;
+        summary?: Metrics;
+        since?: string;
+        until?: string;
+        dailySeries?: Record<string, { date: string; value: number }[]>;
+        series?: { date: string; reach: number }[];
         items?: AnalyticsPost[];
         pagination?: { hasMore: boolean; nextCursor: string | null };
     };
@@ -21,6 +27,7 @@ export type AnalyticsResponse = {
 export type AnalyticsPost = {
     externalId: string;
     metadata: {
+        media_type?: string;
         title?: string;
         video_description?: string;
         cover_image_url?: string;
@@ -35,6 +42,50 @@ export const analyticsProviders: Record<string, {
     accountMetrics: { key: string; label: string }[];
     postMetrics: { key: string; label: string }[];
 }> = {
+    pinterest: {
+        name: "Pinterest",
+        accountMetrics: [
+            { key: "IMPRESSION", label: "Impressions" }, { key: "SAVE", label: "Saves" },
+            { key: "PIN_CLICK", label: "Pin clicks" }, { key: "OUTBOUND_CLICK", label: "Outbound clicks" },
+            { key: "ENGAGEMENT", label: "Engagements" },
+        ],
+        postMetrics: [
+            { key: "IMPRESSION", label: "Impressions" }, { key: "SAVE", label: "Saves" },
+            { key: "PIN_CLICK", label: "Pin clicks" }, { key: "OUTBOUND_CLICK", label: "Outbound clicks" },
+            { key: "VIDEO_MRC_VIEW", label: "Video views" },
+        ],
+    },
+    threads: {
+        name: "Threads",
+        accountMetrics: [{ key: "followers_count", label: "Followers" }],
+        postMetrics: [
+            { key: "views", label: "Views" }, { key: "likes", label: "Likes" },
+            { key: "replies", label: "Replies" }, { key: "reposts", label: "Reposts" },
+            { key: "quotes", label: "Quotes" }, { key: "shares", label: "Shares" },
+        ],
+    },
+    facebook: {
+        name: "Facebook",
+        accountMetrics: [{ key: "followers_count", label: "Followers" }, { key: "fan_count", label: "Page likes" }],
+        postMetrics: [
+            { key: "post_media_view", label: "Views" }, { key: "reactions", label: "Reactions" },
+            { key: "comments", label: "Comments" }, { key: "shares", label: "Shares" },
+        ],
+    },
+    instagram: {
+        name: "Instagram",
+        accountMetrics: [
+            { key: "followers_count", label: "Followers" },
+            { key: "follows_count", label: "Following" },
+            { key: "media_count", label: "Posts" },
+        ],
+        postMetrics: [
+            { key: "views", label: "Views" }, { key: "reach", label: "Reach" },
+            { key: "likes", label: "Likes" }, { key: "comments", label: "Comments" },
+            { key: "saved", label: "Saves" }, { key: "shares", label: "Shares" },
+            { key: "total_interactions", label: "Interactions" },
+        ],
+    },
     tiktok: {
         name: "TikTok",
         accountMetrics: [
@@ -75,7 +126,7 @@ export async function fetchAnalytics(accountId: string, resource: AnalyticsResou
     const response = await apiFetch(`${path}${params.size ? `?${params}` : ""}`, { signal, cache: "no-store" });
     if (!response.ok) {
         const body = await response.clone().json().catch(() => null);
-        if (["RECONNECT_REQUIRED", "UNSUPPORTED_PROVIDER", "ACCOUNT_NOT_FOUND"].includes(body?.code)) {
+        if (["RECONNECT_REQUIRED", "UNSUPPORTED_PROVIDER", "ACCOUNT_NOT_FOUND", "ANALYTICS_ACCESS_DENIED"].includes(body?.code)) {
             throw new AnalyticsRequestError(body.message, body.code);
         }
         await parseApiErrorResponse(response, "We couldn’t load analytics. Please try again.");

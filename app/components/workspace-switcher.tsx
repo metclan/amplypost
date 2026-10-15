@@ -108,7 +108,7 @@ export default function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitch
                             <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                                 Workspace
                             </div>
-                            <div className="truncate text-sm font-semibold text-foreground">
+                            <div className="truncate text-[13px] font-semibold text-foreground">
                                 {selectedWorkspace ? selectedWorkspace.name : "Select workspace"}
                             </div>
                         </div>

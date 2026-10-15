@@ -37,7 +37,7 @@ const staticRoutes: Array<{
 
 // Legal/utility pages — low priority, rarely change, no need to signal freshness
 const legalRoutes: Array<{ path: string; lastModified: Date }> = [
-    { path: "/privacy", lastModified: new Date("2026-06-01") },
+    { path: "/privacy", lastModified: new Date("2026-10-02") },
     { path: "/tos", lastModified: new Date("2026-06-01") },
     { path: "/refund", lastModified: new Date("2026-06-01") },
 ];

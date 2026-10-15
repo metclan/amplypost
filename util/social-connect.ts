@@ -43,7 +43,8 @@ export const connectInstagram = () => {
     const redirectUri = process.env.NEXT_PUBLIC_REDIRECT_URI_INSTAGRAM;
     const scope = [
         "instagram_business_basic",
-        "instagram_business_content_publish"
+        "instagram_business_content_publish",
+        "instagram_business_manage_insights"
     ].join(",");
     const instagramAuthUrl = `https://www.instagram.com/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&force_reauth=true`;
     window.location.href = instagramAuthUrl;
@@ -73,7 +74,8 @@ export const connectTiktok = () => {
 export const connectThread = () => {
     const scope = [
         'threads_basic',
-        'threads_content_publish'
+        'threads_content_publish',
+        'threads_manage_insights'
     ].join(",");
     const redirectUri = process.env.NEXT_PUBLIC_REDIRECT_URI_THREADS;
     const clientKey = process.env.NEXT_PUBLIC_CLIENT_ID_THREADS;

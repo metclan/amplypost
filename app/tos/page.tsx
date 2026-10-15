@@ -144,17 +144,17 @@ export default function TermsOfService() {
                                     necessary to provide our services. For details on how we handle
                                     your data, please refer to our{" "}
                                     <Link
-                                        href="/privacy-policy"
+                                        href="/privacy"
                                         className="font-medium text-pink-600 dark:text-pink-400 hover:underline"
                                     >
                                         Privacy Policy
                                     </Link>{" "}
                                     at{" "}
                                     <a
-                                        href="https://amplypost.com/privacy-policy"
+                                        href="https://amplypost.com/privacy"
                                         className="font-medium text-pink-600 dark:text-pink-400 hover:underline"
                                     >
-                                        https://amplypost.com/privacy-policy
+                                        https://amplypost.com/privacy
                                     </a>
                                     .
                                 </p>
@@ -324,7 +324,7 @@ export default function TermsOfService() {
                         <p>© 2025 Metclan Technologies. All rights reserved.</p>
                         <div className="flex gap-6">
                             <Link
-                                href="/privacy-policy"
+                                href="/privacy"
                                 className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
                             >
                                 Privacy Policy

@@ -78,7 +78,7 @@ export default function ProtectedSidebar({
           />
           {!collapsed && (
             <div>
-              <p className="text-lg font-bold leading-none">Amplypost</p>
+              <p className="text-base font-bold leading-none">Amplypost</p>
             </div>
           )}
         </Link>
@@ -101,8 +101,8 @@ export default function ProtectedSidebar({
               onClick={() => mobile && setIsMobileMenuOpen(false)}
               title={collapsed ? item.name : undefined}
               className={[
-                "group flex h-12 items-center rounded-2xl text-sm font-medium transition-all",
-                collapsed ? "justify-center px-0" : "gap-3 px-4",
+                "group flex h-11 items-center rounded-xl text-[13px] font-medium transition-all",
+                collapsed ? "justify-center px-0" : "gap-2.5 px-3",
                 active
                   ? "bg-primary text-white shadow-sm"
                   : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
@@ -124,8 +124,8 @@ export default function ProtectedSidebar({
           onClick={() => mobile && setIsMobileMenuOpen(false)}
           title={collapsed ? "Help & Support" : undefined}
           className={[
-            "flex items-center rounded-2xl py-3 text-sm font-medium text-muted-foreground transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            collapsed ? "h-12 w-12 justify-center px-0" : "gap-3 px-4",
+            "flex items-center rounded-2xl py-3 text-[13px] font-medium text-muted-foreground transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            collapsed ? "h-12 w-12 justify-center px-0" : "gap-2.5 px-3",
           ].join(" ")}
         >
           <Headphones className="h-5 w-5" />
@@ -140,8 +140,8 @@ export default function ProtectedSidebar({
           onClick={handleLogout}
           title={collapsed ? "Logout" : undefined}
           className={[
-            "flex items-center rounded-2xl py-3 text-sm font-medium text-muted-foreground transition hover:bg-red-500/10 hover:text-red-500",
-            collapsed ? "h-12 w-12 justify-center px-0" : "w-full gap-3 px-4",
+            "flex items-center rounded-2xl py-3 text-[13px] font-medium text-muted-foreground transition hover:bg-red-500/10 hover:text-red-500",
+            collapsed ? "h-12 w-12 justify-center px-0" : "w-full gap-2.5 px-3",
           ].join(" ")}
         >
           <LogOut className="h-5 w-5" />
@@ -178,7 +178,7 @@ export default function ProtectedSidebar({
       </div>
 
       {/* Desktop Sidebar */}
-      <aside className={["fixed inset-y-0 left-0 z-40 hidden border-r border-sidebar-border bg-sidebar transition-[width] duration-200 lg:block", isCollapsed ? "w-20" : "w-72"].join(" ")}>
+      <aside className={["fixed inset-y-0 left-0 z-40 hidden border-r border-sidebar-border bg-sidebar transition-[width] duration-200 lg:block", isCollapsed ? "w-20" : "w-64"].join(" ")}>
         {renderSidebarContent()}
         <button
           type="button"
@@ -199,7 +199,7 @@ export default function ProtectedSidebar({
             onClick={() => setIsMobileMenuOpen(false)}
           />
 
-          <div className="relative h-full w-80 max-w-[85%] border-r border-sidebar-border">
+          <div className="relative h-full w-72 max-w-[85%] border-r border-sidebar-border">
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(false)}
