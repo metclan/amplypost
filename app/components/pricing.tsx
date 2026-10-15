@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Check, Zap } from "lucide-react";
 import { trackTikTok } from "@/lib/tiktok";
 import { apiFetch } from "@/util/backend-api";
+import { CurrencyToggle, usePricingCurrency, plansForCurrency } from "@/components/billing/pricing-currency";
 
 interface PlanFeatures {
     platforms?: Record<string, boolean>;
@@ -20,6 +21,7 @@ interface Plan {
     planCode: string;
     description: string;
     price: number;
+    ngnPrice?: number | null;
     currency: string;
     interval: string;
     trialPeriodDays?: number;
@@ -34,7 +36,7 @@ type ApiResponse<T> = {
 
 type PlansPayload = Plan[] | { plans?: Plan[] };
 
-const currency = "USD";
+
 
 async function readApiResponse<T>(response: Response): Promise<ApiResponse<T>> {
     const json = (await response.json().catch(() => null)) as
@@ -62,6 +64,7 @@ function toTitleCase(value: string) {
 function getCurrencySymbol(currency: string) {
     const symbols: Record<string, string> = {
         USD: "$",
+        NGN: "₦",
         EUR: "EUR",
         GBP: "GBP",
     };
@@ -113,6 +116,7 @@ function getFeatureLines(features?: PlanFeatures) {
 }
 
 export default function Pricing() {
+    const { currency, setCurrency, isLoadingCurrency } = usePricingCurrency();
     const [plans, setPlans] = useState<Plan[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -157,9 +161,7 @@ export default function Pricing() {
         };
     }, []);
 
-    const filteredPlans = plans.filter(
-        (plan) => plan.currency?.toUpperCase() === currency
-    );
+    const filteredPlans = plansForCurrency(plans, currency);
     const planGridClassName =
         filteredPlans.length === 1
             ? "mx-auto grid max-w-md grid-cols-1 gap-6"
@@ -179,8 +181,10 @@ export default function Pricing() {
                     </p>
                 </div>
 
+                <div className="mt-6 flex justify-center"><CurrencyToggle currency={currency} onChange={setCurrency} disabled={isLoadingCurrency} /></div>
+                {currency === "NGN" && !isLoadingCurrency && <p className="mt-3 text-center text-sm text-muted-foreground">Prepaid monthly access. Renew manually; there is no automatic debit.</p>}
                 <div className="mt-12">
-                    {isLoading ? (
+                    {isLoading || isLoadingCurrency ? (
                         <div className="mx-auto grid max-w-7xl gap-6 sm:grid-cols-2 lg:grid-cols-3">
                             {[0, 1, 2].map((item) => (
                                 <div

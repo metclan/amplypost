@@ -9,8 +9,8 @@ type Point = { date: string; value: number };
 const day = 86_400_000;
 const label = (time: number) => new Date(time).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
 
-export default function AnalyticsDailyChart({ series, accountId, title, description, unit, note, previewPosts = true }: {
-    series: Point[]; accountId: string; title: string; description: string; unit: string; note?: string; previewPosts?: boolean;
+export default function AnalyticsDailyChart({ series, accountId, title, description, unit, note, previewPosts = true, animate = false }: {
+    series: Point[]; accountId: string; title: string; description: string; unit: string; note?: string; previewPosts?: boolean; animate?: boolean;
 }) {
     const container = useRef<HTMLDivElement>(null);
     const gradient = useId().replaceAll(":", "");
@@ -79,11 +79,13 @@ export default function AnalyticsDailyChart({ series, accountId, title, descript
                     <defs><linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--primary)" stopOpacity="0.22" /><stop offset="100%" stopColor="var(--primary)" stopOpacity="0.02" /></linearGradient></defs>
                     {[0, 1, 2, 3, 4].map(tick => <g key={tick} aria-hidden="true"><line x1={left} x2={right} y1={y(tick * step)} y2={y(tick * step)} stroke="currentColor" strokeOpacity="0.12" strokeDasharray="3 5" /><text x={left - 8} y={y(tick * step) + 4} textAnchor="end" fill="currentColor" className="text-muted-foreground" fontSize="11">{compact.format(tick * step)}</text></g>)}
                     {ticks.map(index => <text key={index} x={x(points[index].time)} y="248" textAnchor="middle" fill="currentColor" className="text-muted-foreground" fontSize="11">{label(points[index].time)}</text>)}
+                    <g className={animate ? "metric-animation" : undefined}>
                     {segments.map((segment, index) => {
                         const path = segment.map((point, i) => `${i ? "L" : "M"} ${x(point.time)} ${y(point.value)}`).join(" ");
                         return <g key={index} aria-hidden="true"><path d={`${path} L ${x(segment[segment.length - 1].time)} ${bottom} L ${x(segment[0].time)} ${bottom} Z`} fill={`url(#${gradient})`} /><path d={path} fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" /></g>;
                     })}
                     {points.map((point, index) => <circle key={`${point.date}:${index}`} cx={x(point.time)} cy={y(point.value)} r={points.length === 1 ? 4 : 2.5} fill="var(--primary)" aria-hidden="true" />)}
+                    </g>
                     {selected && <g aria-hidden="true"><line x1={x(selected.time)} x2={x(selected.time)} y1={top} y2={bottom} stroke="var(--primary)" strokeOpacity="0.5" strokeDasharray="4 4" /><circle cx={x(selected.time)} cy={y(selected.value)} r="6" fill="var(--primary)" stroke="var(--background)" strokeWidth="3" /></g>}
                 </svg>
                 {selected && <div className="absolute top-4 z-20 w-64 max-w-[calc(100%-1rem)] rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-lg" style={{ left: Math.max(0, Math.min(width - 264, x(selected.time) - 128)) }}>
@@ -94,5 +96,18 @@ export default function AnalyticsDailyChart({ series, accountId, title, descript
             <p className="text-xs text-muted-foreground">{note} Gaps indicate unavailable days.</p>
             <details className="mt-4 text-sm"><summary className="cursor-pointer">View daily values</summary><table className="mt-3 w-full"><caption className="sr-only">{title}</caption><thead><tr><th scope="col" className="text-left">Day</th><th scope="col" className="text-right">{unit}</th></tr></thead><tbody>{points.map((point, index) => <tr key={`${point.date}:${index}`}><td>{label(point.time)}</td><td className="text-right tabular-nums">{formatMetric(point.value)}</td></tr>)}</tbody></table></details>
         </>}
+        <style jsx>{`
+            .metric-animation {
+                transform-origin: 0 220px;
+                animation: metric-enter 500ms ease-out;
+            }
+            @keyframes metric-enter {
+                from { opacity: 0; transform: scaleY(0.1); }
+                to { opacity: 1; transform: scaleY(1); }
+            }
+            @media (prefers-reduced-motion: reduce) {
+                .metric-animation { animation: none; }
+            }
+        `}</style>
     </section>;
 }

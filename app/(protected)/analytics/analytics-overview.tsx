@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowUpRight, RefreshCw, AlertCircle, CalendarDays, CheckCircle2, Clock3, Users } from "lucide-react";
+import { ArrowUpRight, RefreshCw, AlertCircle, CalendarDays, CheckCircle2, Clock3, Users, Eye, ScanEye, Heart, MessageCircle, Share2, Bookmark, Reply, Repeat2, Quote, MousePointerClick, Phone, MapPin, UtensilsCrossed, Activity, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/app/components/workspace-provider";
 import { getPlatformLogo } from "@/lib/client-data";
@@ -16,14 +16,32 @@ const visibility = ["followers", "views", "impressions", "reach"];
 const engagement = ["likes", "comments", "shares", "saves", "replies", "reposts", "quotes", "engagements"];
 const actions = ["pinClicks", "outboundClicks", "websiteClicks", "callClicks", "directions", "bookings", "menuClicks"];
 const accountLink = (id: string, provider: string) => `/analytics/${provider}?account=${encodeURIComponent(id)}`;
+const metricIcons: Record<string, LucideIcon> = {
+    followers: Users, views: Eye, impressions: ScanEye, reach: Users,
+    likes: Heart, comments: MessageCircle, shares: Share2, saves: Bookmark,
+    replies: Reply, reposts: Repeat2, quotes: Quote, engagements: Activity,
+    pinClicks: MousePointerClick, outboundClicks: ArrowUpRight, websiteClicks: MousePointerClick,
+    callClicks: Phone, directions: MapPin, bookings: CalendarDays, menuClicks: UtensilsCrossed,
+};
 function MetricCards({ metrics, keys }: { metrics: OverviewMetric[]; keys: string[] }) {
     return <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">{keys.map(key => {
         const metric = metrics.find(metric => metric.key === key)!;
-        return <div key={key} className="min-w-0 rounded-xl border border-border bg-card p-4">
-            <h3 className="text-sm text-muted-foreground">{metric.label}</h3>
-            <p className="mt-2 break-words text-2xl font-semibold tabular-nums">{formatMetric(metric.value)}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{key === "followers" ? "Current snapshot" : "Last 28 complete days"} · {metric.reporting} reporting {metric.reporting === 1 ? "profile" : "profiles"}</p>
-            <p className="mt-2 text-xs text-muted-foreground">{metric.providers.map(providerName).join(" · ") || "No available data"}</p>
+        const Icon = metricIcons[key] ?? Activity;
+        return <div key={key} className="group relative min-w-0 overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-br from-card via-card to-primary/[0.035] p-4 shadow-sm transition-[border-color,box-shadow] duration-200 hover:border-primary/30 hover:shadow-md motion-reduce:transition-none sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+                <h3 className="pt-1 text-sm font-medium leading-snug text-muted-foreground">{metric.label}</h3>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/[0.08] text-primary ring-1 ring-primary/10 transition-colors group-hover:bg-primary/[0.12] motion-reduce:transition-none"><Icon className="h-4 w-4" aria-hidden="true" /></span>
+            </div>
+            <p className={`mt-3 break-words text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl ${metric.value === null ? "text-muted-foreground/60" : "text-foreground"}`}>{formatMetric(metric.value)}</p>
+            <p className="mt-2 text-[11px] text-muted-foreground">{key === "followers" ? "Current audience snapshot" : "Last 28 complete days"}</p>
+            <div className="mt-4 flex min-h-8 flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
+                {metric.providers.length ? <span role="img" aria-label={`Contributing platforms: ${metric.providers.map(providerName).join(", ")}`} className="flex items-center -space-x-1.5">
+                    {metric.providers.map(provider => <span key={provider} title={providerName(provider)} className="relative flex h-8 w-8 items-center justify-center rounded-full border border-border/70 bg-white shadow-sm ring-2 ring-card transition-transform hover:z-10 hover:-translate-y-0.5 motion-reduce:transition-none">
+                        <Image src={getPlatformLogo(provider)} width={18} height={18} alt="" className="h-[18px] w-[18px] object-contain" />
+                    </span>)}
+                </span> : <span className="text-[11px] text-muted-foreground">Awaiting analytics</span>}
+                <span className="text-[11px] text-muted-foreground">{metric.reporting} {metric.reporting === 1 ? "profile" : "profiles"}</span>
+            </div>
         </div>;
     })}</div>;
 }
@@ -85,8 +103,29 @@ function OverviewContent({ workspaceId, name }: { workspaceId: string | null; na
             { label: "In queue", value: data.publishing.queued, note: "Pending, retrying, or publishing now", icon: Clock3 },
         ].map(item => <div key={item.label} className="rounded-xl border border-border bg-card p-4"><div className="flex items-center justify-between text-sm text-muted-foreground">{item.label}<item.icon className="h-4 w-4" aria-hidden="true" /></div><p className="mt-2 text-3xl font-semibold tabular-nums">{formatMetric(item.value)}</p><p className="mt-1 text-xs text-muted-foreground">{item.note}</p></div>)}</div></section>
         <section className="space-y-3"><div className="flex items-center gap-2"><Users className="h-5 w-5" aria-hidden="true" /><h3 className="text-lg font-semibold">Audience and visibility</h3></div><MetricCards metrics={data.metrics} keys={visibility} /><p className="text-xs text-muted-foreground">Followers can overlap across accounts. Views, impressions, and reach use different provider definitions. Reach is a sum of account totals, not unique people across the app. Pinterest account-wide results are counted once across boards.</p></section>
-        <section className="space-y-3"><h3 className="text-lg font-semibold">Performance over time</h3><label className="flex items-center gap-3 text-sm">Show<select value={chart} onChange={event => setChart(event.target.value)} className="rounded-lg border border-border bg-background px-3 py-2"><option value="published">Published posts</option>{chartMetrics.map(metric => <option key={metric.key} value={metric.key}>{metric.label}</option>)}</select></label>
-            <AnalyticsDailyChart key={chart} accountId="overview" title={chart === "published" ? "Daily publications" : `Daily ${selectedMetric?.label.toLowerCase() ?? chart}`} description={chart === "published" ? "Publications recorded by Amplypost, by UTC publish date." : "Available daily reports from connected profiles. Totals include only reporting profiles for each day."} unit={chart === "published" ? "publications" : selectedMetric?.label.toLowerCase() ?? chart} series={series} previewPosts={false} note="Missing provider days remain gaps. Reporting coverage can vary between days. Daily reach cannot be added to calculate unique reach for the period." />
+        <section className="space-y-4">
+            <div><h3 className="text-lg font-semibold">Performance over time</h3><p className="mt-1 text-xs text-muted-foreground">Switch metrics to explore your daily performance.</p></div>
+            <div role="tablist" aria-label="Performance metric" className="flex flex-wrap gap-1 rounded-xl border border-border/70 bg-muted/50 p-1.5">
+                {[{ key: "published", label: "Published posts" }, ...chartMetrics].map((metric, index, tabs) => {
+                    const Icon = metric.key === "published" ? CheckCircle2 : metricIcons[metric.key] ?? Activity;
+                    const active = chart === metric.key;
+                    return <button key={metric.key} type="button" role="tab" id={`overview-tab-${metric.key}`} aria-controls="overview-performance-panel" aria-selected={active} tabIndex={active ? 0 : -1}
+                        onClick={() => setChart(metric.key)}
+                        onKeyDown={event => {
+                            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                            event.preventDefault();
+                            const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+                            setChart(tabs[next].key);
+                            document.getElementById(`overview-tab-${tabs[next].key}`)?.focus();
+                        }}
+                        className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-[background-color,color,box-shadow] duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-reduce:transition-none sm:text-sm ${active ? "bg-background text-primary shadow-sm ring-1 ring-border/50" : "text-muted-foreground hover:bg-background/60 hover:text-foreground"}`}>
+                        <Icon className="h-3.5 w-3.5" aria-hidden="true" />{metric.label}
+                    </button>;
+                })}
+            </div>
+            <div role="tabpanel" id="overview-performance-panel" aria-labelledby={`overview-tab-${chart}`} tabIndex={0} className="rounded-xl outline-offset-4 focus-visible:outline-2 focus-visible:outline-primary">
+                <AnalyticsDailyChart key={chart} animate accountId="overview" title={chart === "published" ? "Daily publications" : `Daily ${selectedMetric?.label.toLowerCase() ?? chart}`} description={chart === "published" ? "Publications recorded by Amplypost, by UTC publish date." : "Available daily reports from connected profiles. Totals include only reporting profiles for each day."} unit={chart === "published" ? "publications" : selectedMetric?.label.toLowerCase() ?? chart} series={series} previewPosts={false} note="Missing provider days remain gaps. Reporting coverage can vary between days. Daily reach cannot be added to calculate unique reach for the period." />
+            </div>
         </section>
         <section className="space-y-3"><h3 className="text-lg font-semibold">Engagement</h3><MetricCards metrics={data.metrics} keys={engagement} /><p className="text-xs text-muted-foreground">Provider-reported engagements may overlap with likes, comments, and other actions. These cards should not be added together.</p></section>
         <section className="space-y-3"><h3 className="text-lg font-semibold">Traffic and business actions</h3><MetricCards metrics={data.metrics} keys={actions} /><p className="text-xs text-muted-foreground">Call-button clicks measure intent, not completed calls. Bookings and menu data depend on business features. — means unavailable.</p></section>

@@ -18,6 +18,7 @@ import {
 import { useCachedResource } from "@/lib/client-cache";
 import { CACHE_TTL } from "@/lib/client-data";
 import { apiFetch } from "@/util/backend-api";
+import { CurrencyToggle, usePricingCurrency, plansForCurrency } from "@/components/billing/pricing-currency";
 
 interface PlanFeatures {
     platforms?: Record<string, boolean>;
@@ -34,6 +35,7 @@ interface Plan {
     planCode: string;
     dodoProductId?: string;
     price: number;
+    ngnPrice?: number | null;
     currency: string;
     interval: string;
     trialPeriodDays?: number;
@@ -51,6 +53,7 @@ interface Subscription {
     currentPeriodStart: string | null;
     currentPeriodEnd: string | null;
     cancelAtPeriodEnd: boolean;
+    billingProvider?: string;
     canceledAt: string | null;
     createdAt: string;
     updatedAt: string;
@@ -74,7 +77,7 @@ type ApiResponse<T> = {
 type PlansPayload = Plan[] | { plans?: Plan[] };
 type BillingTab = "subscription" | "payments" | "plans";
 
-const currency = "USD";
+
 const BILLING_CURRENT_CACHE_KEY = "billing:subscriptions:current";
 const BILLING_PLANS_CACHE_KEY = "billing:plans";
 const BILLING_HISTORY_CACHE_PREFIX = "billing:subscriptions:history";
@@ -89,6 +92,7 @@ const emptyPagination: PaginationInfo = {
 function getCurrencySymbol(currency: string) {
     const symbols: Record<string, string> = {
         USD: "$",
+        NGN: "₦",
         EUR: "€",
         GBP: "£",
     };
@@ -234,6 +238,7 @@ async function fetchSubscriptionHistory(page: number, limit: number) {
 }
 
 export function Billing() {
+    const { currency, setCurrency, isLoadingCurrency } = usePricingCurrency();
     const router = useRouter();
 
     const [pagination, setPagination] = useState<PaginationInfo>(emptyPagination);
@@ -273,8 +278,8 @@ export function Billing() {
     const loadingError = currentSubscriptionError ?? plansError;
 
     const filteredPlans = useMemo(
-        () => plans.filter((plan) => plan.currency.toUpperCase() === currency),
-        [plans],
+        () => plansForCurrency(plans, currency),
+        [plans, currency],
     );
 
     const handleUnauthorized = (response: Response) => {
@@ -328,6 +333,7 @@ export function Billing() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     planId: plan.id,
+                    currency,
                     returnUrl: `${window.location.origin}/billing/payment-status`,
                     cancelUrl: `${window.location.origin}/billing`,
                 }),
@@ -485,6 +491,8 @@ export function Billing() {
                                 </div>
                             )}
 
+                            {currentSubscription.billingProvider === "bachs" && <p className="text-sm text-muted-foreground">Prepaid NGN plan. Renew manually before your access expires; there is no automatic debit.</p>}
+
                             {shouldShowTabs && (
                                 <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
                                     <div>
@@ -523,12 +531,13 @@ export function Billing() {
                         {shouldShowPlansImmediately ? "Choose a plan" : "Plans"}
                     </h2>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Start with a free trial. Your card will not be charged during the trial period.
+                        {currency === "NGN" ? "Pay for one month in naira. Renew manually; there is no automatic debit." : "Start with a free trial. Your card will not be charged during the trial period."}
                     </p>
                 </div>
 
                 <div className="p-6">
-                    {isLoadingPlans ? (
+                    <div className="mb-5"><CurrencyToggle currency={currency} onChange={setCurrency} disabled={isLoadingCurrency || subscribingPlanId !== null} /></div>
+                    {isLoadingPlans || isLoadingCurrency ? (
                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                             {[0, 1, 2].map((item) => (
                                 <div key={item} className="h-56 animate-pulse rounded-xl border border-border bg-muted/40" />

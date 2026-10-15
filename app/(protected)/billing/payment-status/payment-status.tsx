@@ -9,7 +9,7 @@ import { trackConfirmedSubscription, type TrackedSubscription } from "@/lib/tikt
 import { authFetch } from "@/util/backend-api";
 import { apiFetch } from "@/util/backend-api";
 
-type Subscription = TrackedSubscription;
+type Subscription = TrackedSubscription & { bachsCheckout?: { providerCheckoutId: string | null } | null };
 
 type PageState = "loading" | "success" | "pending" | "failed";
 
@@ -21,8 +21,8 @@ function wait(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function fetchCurrentSubscription() {
-    const response = await apiFetch("billing/subscriptions/current", {
+async function fetchCurrentSubscription(checkoutId: string | null) {
+    const response = await apiFetch(`billing/subscriptions/current${checkoutId ? `?checkout_id=${encodeURIComponent(checkoutId)}` : ""}`, {
         cache: "no-store",
     });
 
@@ -34,12 +34,12 @@ async function fetchCurrentSubscription() {
     return json?.data ?? null;
 }
 
-async function waitForSubscription(signal: AbortSignal, subscriptionId: string | null, failed: boolean) {
+async function waitForSubscription(signal: AbortSignal, subscriptionId: string | null, failed: boolean, checkoutId: string | null) {
     for (let attempt = 0; attempt < POLL_ATTEMPTS; attempt += 1) {
         if (signal.aborted) return null;
 
-        const subscription = await fetchCurrentSubscription();
-        const matchesCheckout = !subscriptionId || subscription?.dodoSubscriptionId === subscriptionId;
+        const subscription = await fetchCurrentSubscription(checkoutId);
+        const matchesCheckout = checkoutId ? subscription?.bachsCheckout?.providerCheckoutId === checkoutId : !subscriptionId || subscription?.dodoSubscriptionId === subscriptionId;
         const paymentConfirmed = subscription?.confirmedPayment?.status === "succeeded";
         if (!failed && matchesCheckout && subscription?.hasAccess && (subscription.isTrialing || paymentConfirmed)) {
             return subscription;
@@ -58,6 +58,7 @@ export function PaymentStatus() {
     const searchParams = useSearchParams();
     const statusParam = searchParams.get("status")?.toLowerCase() ?? "";
     const subscriptionId = searchParams.get("subscription_id");
+    const checkoutId = searchParams.get("checkout_id");
     const email = searchParams.get("email");
     const abortControllerRef = useRef<AbortController | null>(null);
     const redirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -76,7 +77,7 @@ export function PaymentStatus() {
         setIsCheckingAgain(isManualRetry);
 
         try {
-            const subscription = await waitForSubscription(controller.signal, subscriptionId, FAILED_RETURN_STATUSES.has(statusParam));
+            const subscription = await waitForSubscription(controller.signal, subscriptionId, FAILED_RETURN_STATUSES.has(statusParam), checkoutId);
             if (controller.signal.aborted) return;
 
             if (subscription?.hasAccess) {
@@ -112,7 +113,7 @@ export function PaymentStatus() {
                 setIsCheckingAgain(false);
             }
         }
-    }, [router, statusParam, subscriptionId]);
+    }, [router, statusParam, subscriptionId, checkoutId]);
 
     useEffect(() => {
         void confirmSubscription();
