@@ -182,7 +182,7 @@ export default function Pricing() {
                 </div>
 
                 <div className="mt-6 flex justify-center"><CurrencyToggle currency={currency} onChange={setCurrency} disabled={isLoadingCurrency} /></div>
-                {currency === "NGN" && !isLoadingCurrency && <p className="mt-3 text-center text-sm text-muted-foreground">Prepaid monthly access. Renew manually; there is no automatic debit.</p>}
+                {currency === "NGN" && !isLoadingCurrency && <p className="mt-3 text-center text-sm text-muted-foreground">Monthly subscription in naira. Renews automatically until canceled.</p>}
                 <div className="mt-12">
                     {isLoading || isLoadingCurrency ? (
                         <div className="mx-auto grid max-w-7xl gap-6 sm:grid-cols-2 lg:grid-cols-3">

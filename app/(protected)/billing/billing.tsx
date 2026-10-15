@@ -54,6 +54,8 @@ interface Subscription {
     currentPeriodEnd: string | null;
     cancelAtPeriodEnd: boolean;
     billingProvider?: string;
+    bachsSubscriptionId?: string | null;
+    bachsCheckout?: { productId?: string | null } | null;
     canceledAt: string | null;
     createdAt: string;
     updatedAt: string;
@@ -243,6 +245,7 @@ export function Billing() {
 
     const [pagination, setPagination] = useState<PaginationInfo>(emptyPagination);
     const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
+    const [openingPortal, setOpeningPortal] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<BillingTab>("subscription");
     const historyCacheKey = getBillingHistoryCacheKey(pagination.page, pagination.limit);
@@ -321,6 +324,22 @@ export function Billing() {
                 {status.charAt(0).toUpperCase() + status.slice(1).replace("_", " ")}
             </span>
         );
+    };
+
+    const openBillingPortal = async () => {
+        setOpeningPortal(true);
+        setError(null);
+        try {
+            const response = await apiFetch("billing/customer-portal", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+            if (handleUnauthorized(response)) return;
+            const json = await readApiResponse<{ portalUrl: string }>(response);
+            if (!json.data?.portalUrl) throw new Error("Unable to open billing management. Please try again.");
+            window.location.href = json.data.portalUrl;
+        } catch (error) {
+            setError(error instanceof Error ? error.message : "Unable to open billing management.");
+        } finally {
+            setOpeningPortal(false);
+        }
     };
 
     const startCheckout = async (plan: Plan) => {
@@ -491,7 +510,13 @@ export function Billing() {
                                 </div>
                             )}
 
-                            {currentSubscription.billingProvider === "bachs" && <p className="text-sm text-muted-foreground">Prepaid NGN plan. Renew manually before your access expires; there is no automatic debit.</p>}
+                            {currentSubscription.billingProvider === "bachs" && <p className="text-sm text-muted-foreground">{currentSubscription.bachsSubscriptionId ? currentSubscription.status === "cancelled" ? "This subscription is canceled. Manage billing below." : currentSubscription.cancelAtPeriodEnd ? "Automatic renewal is canceled. Access continues until the current period ends." : "Your NGN subscription renews automatically. Manage your payment card or cancel renewal below." : currentSubscription.bachsCheckout?.productId ? "Waiting for confirmation of your first subscription payment." : "Prepaid NGN plan. Renew manually before your access expires; there is no automatic debit."}</p>}
+
+                            {currentSubscription.bachsSubscriptionId && (
+                                <button type="button" onClick={openBillingPortal} disabled={openingPortal} className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-60">
+                                    {openingPortal && <Loader2 className="h-4 w-4 animate-spin" />} Manage subscription
+                                </button>
+                            )}
 
                             {shouldShowTabs && (
                                 <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -516,7 +541,7 @@ export function Billing() {
                         <div>
                             <p className="font-medium text-foreground">No active subscription</p>
                             <p className="mt-1 text-sm text-muted-foreground">
-                                Choose a plan below to start your free trial and begin scheduling content.
+                                Choose a plan below to begin scheduling content.
                             </p>
                         </div>
                     )}
@@ -531,7 +556,7 @@ export function Billing() {
                         {shouldShowPlansImmediately ? "Choose a plan" : "Plans"}
                     </h2>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        {currency === "NGN" ? "Pay for one month in naira. Renew manually; there is no automatic debit." : "Start with a free trial. Your card will not be charged during the trial period."}
+                        {currency === "NGN" ? "Subscribe in naira. Your card is charged monthly until you cancel." : "Start with a free trial. Your card will not be charged during the trial period."}
                     </p>
                 </div>
 
