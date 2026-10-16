@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import EditScheduledPost from "../posts/edit-scheduled-post";
+import { Button } from "@/components/ui/button";
 import { useCallback, useMemo, useState } from "react";
 import { Bookmark, Clock3, FileText, Heart, MessageCircle, MoreHorizontal, Repeat2, Send, Share2, ThumbsUp, VolumeX, X } from "lucide-react";
 
@@ -381,6 +383,7 @@ async function fetchCalendarPosts(params: URLSearchParams) {
 }
 
 export default function CalendarView() {
+    const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedPost, setSelectedPost] = useState<CalendarPost | null>(null);
     const [isLoadingPostDetails, setIsLoadingPostDetails] = useState(false);
@@ -577,6 +580,8 @@ export default function CalendarView() {
                 </div>
             </div>
 
+            {editingGroupId && <EditScheduledPost groupId={editingGroupId} onClose={() => setEditingGroupId(null)} onSaved={() => { setEditingGroupId(null); setSelectedPost(null); }} />}
+
             {selectedPost && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={closePostDetails}>
                     <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl" onClick={(event) => event.stopPropagation()}>
@@ -609,6 +614,7 @@ export default function CalendarView() {
                                     </div>
                                 )}
 
+                                {selectedPost.status === "scheduled" && selectedPost.groupId && <Button variant="outline" onClick={() => { setEditingGroupId(selectedPost.groupId!); setSelectedPost(null); }}>Edit scheduled post</Button>}
                                 <div>
                                     <h4 className="mb-3 text-sm font-semibold text-foreground">Platform Preview</h4>
                                     <PlatformPostPreview post={selectedPost} />

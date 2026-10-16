@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import EditScheduledPost from "./edit-scheduled-post";
 import { useCallback, useMemo, useState } from "react";
 import { CalendarDays, CheckCircle2, Clock3, ExternalLink, FileText, Layers3, Loader2, Send, X } from "lucide-react";
 
@@ -475,6 +476,7 @@ function PaginationControls({
 }
 
 export default function PostsClient() {
+    const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
     const defaultDateRange = useMemo(() => getDefaultDateRange(), []);
     const [activeTab, setActiveTab] = useState<typeof POSTS_TAB | typeof GROUPS_TAB>(POSTS_TAB);
     const [fromDate, setFromDate] = useState(defaultDateRange.from);
@@ -1024,6 +1026,8 @@ export default function PostsClient() {
                 </div>
             )}
 
+            {editingGroupId && <EditScheduledPost groupId={editingGroupId} onClose={() => setEditingGroupId(null)} onSaved={() => { setEditingGroupId(null); setSelectedPost(null); setSelectedGroupModal(null); }} />}
+
             {selectedPost && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={closePostDetails}>
                     <div
@@ -1064,6 +1068,7 @@ export default function PostsClient() {
                                     </div>
                                 )}
 
+                                {selectedPost.status === "scheduled" && selectedPost.groupId && <Button variant="outline" onClick={() => { setEditingGroupId(selectedPost.groupId!); setSelectedPost(null); }}>Edit scheduled post</Button>}
                                 <div>
                                     <h4 className="mb-3 text-sm font-semibold text-foreground">Platform Preview</h4>
                                     <PlatformPostPreview post={selectedPost} />

@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import {
     AlertCircle,
     ArrowRight,
-    Calendar,
     Check,
     CheckCircle2,
     ChevronLeft,
@@ -55,6 +54,9 @@ interface Subscription {
     cancelAtPeriodEnd: boolean;
     billingProvider?: string;
     bachsSubscriptionId?: string | null;
+    bachsCustomerId?: string | null;
+    dodoCustomerId?: string | null;
+    checkoutUrl?: string | null;
     bachsCheckout?: { productId?: string | null } | null;
     canceledAt: string | null;
     createdAt: string;
@@ -62,6 +64,16 @@ interface Subscription {
     plan: Plan;
     isTrialing: boolean;
     hasAccess: boolean;
+}
+
+interface Payment {
+    id: string;
+    amount: number;
+    currency: string;
+    status: string | null;
+    paymentMethod: string | null;
+    createdAt: string;
+    plan: { name: string; planCode: string } | null;
 }
 
 interface PaginationInfo {
@@ -82,7 +94,7 @@ type BillingTab = "subscription" | "payments" | "plans";
 
 const BILLING_CURRENT_CACHE_KEY = "billing:subscriptions:current";
 const BILLING_PLANS_CACHE_KEY = "billing:plans";
-const BILLING_HISTORY_CACHE_PREFIX = "billing:subscriptions:history";
+const BILLING_HISTORY_CACHE_PREFIX = "billing:payments";
 
 const emptyPagination: PaginationInfo = {
     page: 1,
@@ -218,9 +230,9 @@ function getBillingHistoryCacheKey(page: number, limit: number) {
     return `${BILLING_HISTORY_CACHE_PREFIX}:${page}:${limit}`;
 }
 
-async function fetchSubscriptionHistory(page: number, limit: number) {
+async function fetchPaymentHistory(page: number, limit: number) {
     const response = await apiFetch(
-        `billing/subscriptions/history?page=${page}&limit=${limit}`,
+        `billing/payments?page=${page}&limit=${limit}`,
         {
             cache: "no-store",
         },
@@ -229,7 +241,7 @@ async function fetchSubscriptionHistory(page: number, limit: number) {
     if (response.status === 401) throw new UnauthorizedError();
 
     const json = await readApiResponse<{
-        items: Subscription[];
+        items: Payment[];
         pagination: PaginationInfo;
     }>(response);
 
@@ -246,6 +258,7 @@ export function Billing() {
     const [pagination, setPagination] = useState<PaginationInfo>(emptyPagination);
     const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
     const [openingPortal, setOpeningPortal] = useState(false);
+    const [errorScope, setErrorScope] = useState<"checkout" | "portal">("checkout");
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<BillingTab>("subscription");
     const historyCacheKey = getBillingHistoryCacheKey(pagination.page, pagination.limit);
@@ -254,7 +267,7 @@ export function Billing() {
         [pagination],
     );
     const historyFetcher = useCallback(
-        () => fetchSubscriptionHistory(pagination.page, pagination.limit),
+        () => fetchPaymentHistory(pagination.page, pagination.limit),
         [pagination.limit, pagination.page],
     );
     const {
@@ -276,7 +289,7 @@ export function Billing() {
         historyFetcher,
         { ttl: CACHE_TTL, initialData: historyInitialData },
     );
-    const subscriptionHistory = historyData?.items ?? [];
+    const paymentHistory = historyData?.items ?? [];
     const historyPagination = historyData?.pagination ?? pagination;
     const loadingError = currentSubscriptionError ?? plansError;
 
@@ -304,9 +317,11 @@ export function Billing() {
         }
     }, [currentSubscriptionError, historyError, plansError, router]);
 
-    const getStatusBadge = (subscription: Subscription) => {
-        const status = subscription.isTrialing ? "trialing" : subscription.status;
+    const getStatusBadge = (subscription: { status: string | null; isTrialing?: boolean }) => {
+        const status = subscription.isTrialing ? "trialing" : subscription.status ?? "pending";
         const statusConfig: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
+            succeeded: { bg: "bg-green-500/10", text: "text-green-600", icon: CheckCircle2 },
+            refunded: { bg: "bg-zinc-500/10", text: "text-zinc-600", icon: AlertCircle },
             active: { bg: "bg-green-500/10", text: "text-green-600", icon: CheckCircle2 },
             trialing: { bg: "bg-blue-500/10", text: "text-blue-600", icon: Clock },
             pending: { bg: "bg-amber-500/10", text: "text-amber-600", icon: Clock },
@@ -327,6 +342,7 @@ export function Billing() {
     };
 
     const openBillingPortal = async () => {
+        setErrorScope("portal");
         setOpeningPortal(true);
         setError(null);
         try {
@@ -343,6 +359,7 @@ export function Billing() {
     };
 
     const startCheckout = async (plan: Plan) => {
+        setErrorScope("checkout");
         setSubscribingPlanId(plan.id);
         setError(null);
 
@@ -384,12 +401,12 @@ export function Billing() {
         ? currentSubscription.trialEndsAt
         : currentSubscription?.currentPeriodEnd ?? null;
     const shouldShowPlansImmediately = !currentSubscription || currentSubscription.isTrialing || !currentSubscription.hasAccess;
-    const shouldShowTabs = Boolean(currentSubscription && !currentSubscription.isTrialing && currentSubscription.hasAccess);
-    const shouldShowSubscriptionSection = shouldShowPlansImmediately || activeTab === "subscription";
-    const shouldShowPlansSection = shouldShowPlansImmediately || activeTab === "plans";
-    const shouldShowPaymentsSection = !shouldShowPlansImmediately && activeTab === "payments";
+    const shouldShowSubscriptionSection = activeTab === "subscription";
+    const shouldShowPlansSection = activeTab === "plans" || (activeTab === "subscription" && shouldShowPlansImmediately);
+    const shouldShowPaymentsSection = activeTab === "payments";
 
     const switchToPlans = () => {
+        setError(null);
         setActiveTab("plans");
         requestAnimationFrame(() => {
             document.getElementById("billing-plans")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -409,15 +426,14 @@ export function Billing() {
                 </div>
             </div>
 
-            {(error || loadingError) && (
+            {loadingError && (
                 <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-600">
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <p>{error || loadingError?.message}</p>
+                    <p>{loadingError?.message}</p>
                 </div>
             )}
 
-            {shouldShowTabs && (
-                <div className="inline-flex rounded-xl border border-border bg-card p-1 shadow-sm">
+            <div className="inline-flex rounded-xl border border-border bg-card p-1 shadow-sm">
                     {([
                         ["subscription", "Subscription"],
                         ["payments", "Payments"],
@@ -426,7 +442,7 @@ export function Billing() {
                         <button
                             key={tab}
                             type="button"
-                            onClick={() => setActiveTab(tab)}
+                            onClick={() => { setError(null); setActiveTab(tab); }}
                             className={`h-10 cursor-pointer rounded-lg px-4 text-sm font-semibold transition ${
                                 activeTab === tab
                                     ? "bg-primary text-white shadow-sm"
@@ -437,10 +453,13 @@ export function Billing() {
                         </button>
                     ))}
                 </div>
+
+            {error && errorScope === "portal" && activeTab === "subscription" && (
+                <p role="alert" className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-600">{error}</p>
             )}
 
             {shouldShowSubscriptionSection && (
-            <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <section id="billing-subscription" className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
                 <div className="flex items-center gap-2 border-b border-border p-5">
                     <CreditCard className="h-5 w-5 text-primary" />
                     <h2 className="text-lg font-semibold text-foreground">Current Subscription</h2>
@@ -510,15 +529,19 @@ export function Billing() {
                                 </div>
                             )}
 
-                            {currentSubscription.billingProvider === "bachs" && <p className="text-sm text-muted-foreground">{currentSubscription.bachsSubscriptionId ? currentSubscription.status === "cancelled" ? "This subscription is canceled. Manage billing below." : currentSubscription.cancelAtPeriodEnd ? "Automatic renewal is canceled. Access continues until the current period ends." : "Your NGN subscription renews automatically. Manage your payment card or cancel renewal below." : currentSubscription.bachsCheckout?.productId ? "Waiting for confirmation of your first subscription payment." : "Prepaid NGN plan. Renew manually before your access expires; there is no automatic debit."}</p>}
+                            {currentSubscription.billingProvider === "bachs" && <p className="text-sm text-muted-foreground">{currentSubscription.bachsSubscriptionId ? currentSubscription.status === "cancelled" ? "This subscription is canceled. Manage billing below." : currentSubscription.cancelAtPeriodEnd ? "Automatic renewal is canceled. Access continues until the current period ends." : "Your NGN subscription renews automatically. Manage your payment card or cancel renewal below." : currentSubscription.bachsCheckout?.productId ? "Waiting for confirmation of your earlier recurring checkout. New Naira purchases use one-time checkout." : currentSubscription.status === "pending" ? "Complete your one-time checkout to activate access. There are no automatic charges." : "Prepaid NGN plan. Renew manually before your access expires; there is no automatic debit."}</p>}
 
-                            {currentSubscription.bachsSubscriptionId && (
+                            {currentSubscription.status === "pending" && currentSubscription.checkoutUrl && (
+                                <a href={currentSubscription.checkoutUrl} className="inline-flex h-10 items-center rounded-lg bg-primary px-4 text-sm font-semibold text-white">Continue checkout</a>
+                            )}
+
+                            {(currentSubscription.bachsCustomerId || currentSubscription.dodoCustomerId) && (
                                 <button type="button" onClick={openBillingPortal} disabled={openingPortal} className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-60">
                                     {openingPortal && <Loader2 className="h-4 w-4 animate-spin" />} Manage subscription
                                 </button>
                             )}
 
-                            {shouldShowTabs && (
+                            {currentSubscription.hasAccess && (
                                 <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
                                     <div>
                                         <p className="text-sm font-semibold text-foreground">Looking ahead?</p>
@@ -556,11 +579,21 @@ export function Billing() {
                         {shouldShowPlansImmediately ? "Choose a plan" : "Plans"}
                     </h2>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        {currency === "NGN" ? "Subscribe in naira. Your card is charged monthly until you cancel." : "Start with a free trial. Your card will not be charged during the trial period."}
+                        {currency === "NGN" ? "Pay once in naira for the selected period. Renew manually when needed; there are no automatic charges." : "Start with a free trial. Your card will not be charged during the trial period."}
                     </p>
                 </div>
 
                 <div className="p-6">
+                    {error && errorScope === "checkout" && (
+                        <div role="alert" className="mb-5 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-600">
+                            <p>{error}</p>
+                            <button type="button" onClick={() => {
+                                setError(null);
+                                setActiveTab("subscription");
+                                requestAnimationFrame(() => document.getElementById("billing-subscription")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+                            }} className="mt-2 font-semibold underline">View current subscription</button>
+                        </div>
+                    )}
                     <div className="mb-5"><CurrencyToggle currency={currency} onChange={setCurrency} disabled={isLoadingCurrency || subscribingPlanId !== null} /></div>
                     {isLoadingPlans || isLoadingCurrency ? (
                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -637,7 +670,7 @@ export function Billing() {
                                                     <>
                                                         {(plan.trialPeriodDays ?? 0) > 0
                                                             ? `Start ${plan.trialPeriodDays}-day free trial`
-                                                            : "Choose plan"}
+                                                            : currency === "NGN" ? "Pay once" : "Choose plan"}
                                                         <ArrowRight className="h-4 w-4" />
                                                     </>
                                                 )}
@@ -663,17 +696,19 @@ export function Billing() {
                 <div className="border-b border-border p-5">
                     <h2 className="text-lg font-semibold text-foreground">Payments</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Previous and current subscription records.
+                        Payment transactions for your subscriptions. Unfinished checkouts appear under Current Subscription.
                     </p>
                 </div>
 
-                {isLoadingHistory ? (
+                {historyError ? (
+                    <p role="alert" className="p-6 text-sm text-red-600">{historyError.message}</p>
+                ) : isLoadingHistory ? (
                     <div className="p-6">
                         <div className="h-40 animate-pulse rounded-xl bg-muted" />
                     </div>
-                ) : subscriptionHistory.length === 0 ? (
+                ) : paymentHistory.length === 0 ? (
                     <p className="p-8 text-center text-sm text-muted-foreground">
-                        No subscription history found.
+                        No payments recorded yet.
                     </p>
                 ) : (
                     <>
@@ -681,7 +716,7 @@ export function Billing() {
                             <table className="w-full">
                                 <thead className="border-b border-border bg-muted/50">
                                     <tr>
-                                        {["Plan", "Status", "Price", "Started", "Ends"].map((heading) => (
+                                        {["Plan", "Status", "Amount", "Date", "Method"].map((heading) => (
                                             <th key={heading} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-foreground">
                                                 {heading}
                                             </th>
@@ -689,30 +724,18 @@ export function Billing() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border">
-                                    {subscriptionHistory.map((subscription) => (
-                                        <tr key={subscription.id} className="hover:bg-muted/30">
+                                    {paymentHistory.map((payment) => (
+                                        <tr key={payment.id} className="hover:bg-muted/30">
                                             <td className="px-5 py-4">
-                                                <p className="text-sm font-medium text-foreground">
-                                                    {subscription.plan.name}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    {subscription.plan.planCode}
-                                                </p>
+                                                <p className="text-sm font-medium text-foreground">{payment.plan?.name ?? "Payment"}</p>
+                                                <p className="text-xs text-muted-foreground">{payment.plan?.planCode}</p>
                                             </td>
-                                            <td className="px-5 py-4">{getStatusBadge(subscription)}</td>
+                                            <td className="px-5 py-4">{getStatusBadge(payment)}</td>
                                             <td className="px-5 py-4 text-sm text-foreground">
-                                                {getCurrencySymbol(subscription.plan.currency)}
-                                                {subscription.plan.price.toLocaleString()} / {subscription.plan.interval}
+                                                {getCurrencySymbol(payment.currency)}{payment.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </td>
-                                            <td className="px-5 py-4 text-sm text-foreground">
-                                                {formatDate(subscription.createdAt)}
-                                            </td>
-                                            <td className="px-5 py-4 text-sm text-foreground">
-                                                <span className="inline-flex items-center gap-1">
-                                                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                                                    {formatDate(subscription.isTrialing ? subscription.trialEndsAt : subscription.currentPeriodEnd)}
-                                                </span>
-                                            </td>
+                                            <td className="px-5 py-4 text-sm text-foreground">{formatDate(payment.createdAt)}</td>
+                                            <td className="px-5 py-4 text-sm text-foreground">{payment.paymentMethod ? toTitleCase(payment.paymentMethod) : "N/A"}</td>
                                         </tr>
                                     ))}
                                 </tbody>
