@@ -278,13 +278,13 @@ export default function Pricing() {
                                                         : "border border-border bg-background text-foreground hover:bg-muted"
                                                     }`}
                                             >
-                                                {plan.trialPeriodDays && plan.trialPeriodDays > 0
+                                                {(plan.trialPeriodDays ?? 0) > 0
                                                     ? `Start ${plan.trialPeriodDays}-day free trial`
                                                     : "Start now"}
                                                 <ArrowRight className="h-4 w-4" />
                                             </Link>
 
-                                            {plan.trialPeriodDays && plan.trialPeriodDays > 0 && (
+                                            {(plan.trialPeriodDays ?? 0) > 0 && (
                                                 <p className="mt-3 text-center text-xs font-medium text-muted-foreground">
                                                     $0.00 due today. No card required.
                                                 </p>

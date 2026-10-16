@@ -635,7 +635,7 @@ export function Billing() {
                                                     "Redirecting..."
                                                 ) : (
                                                     <>
-                                                        {plan.trialPeriodDays && plan.trialPeriodDays > 0
+                                                        {(plan.trialPeriodDays ?? 0) > 0
                                                             ? `Start ${plan.trialPeriodDays}-day free trial`
                                                             : "Choose plan"}
                                                         <ArrowRight className="h-4 w-4" />
@@ -643,7 +643,7 @@ export function Billing() {
                                                 )}
                                             </button>
 
-                                            {plan.trialPeriodDays && plan.trialPeriodDays > 0 && (
+                                            {(plan.trialPeriodDays ?? 0) > 0 && (
                                                 <p className="mt-3 text-center text-xs font-medium text-muted-foreground">
                                                     $0.00 due today. Your card will not be charged during trial.
                                                 </p>
